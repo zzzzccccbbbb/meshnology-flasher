@@ -1,4 +1,4 @@
-﻿const { chromium } = require('playwright');
+const { chromium } = require('playwright');
 (async () => {
   const browser = await chromium.launch({ executablePath: 'C:\\\\Users\\\\97648\\\\AppData\\\\Local\\\\ms-playwright\\\\chromium-1223\\\\chrome-win64\\\\chrome.exe' });
   const page = await browser.newPage();

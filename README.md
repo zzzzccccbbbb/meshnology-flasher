@@ -1,4 +1,4 @@
-﻿# Meshnology Web Flasher
+# Meshnology Web Flasher
 
 A 100% client-side, open-source firmware flashing tool for **ESP32-S3** and **Nordic nRF52**. No login, no cloud, no telemetry. The browser talks to your device directly through **WebUSB**.
 

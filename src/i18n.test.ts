@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { STRINGS, type Lang } from './i18n';
 
 describe('i18n strings', () => {

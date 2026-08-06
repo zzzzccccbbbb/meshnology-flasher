@@ -1,4 +1,4 @@
-﻿import './style.css';
+import './style.css';
 import { detectBrowserSupport, validateSegments, type FirmwareSegment } from './flasher';
 import { STRINGS, type Lang } from './i18n';
 

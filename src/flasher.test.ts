@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { validateSegments, detectBrowserSupport } from './flasher';
 
 describe('firmware validation', () => {

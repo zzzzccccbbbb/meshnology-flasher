@@ -1,4 +1,4 @@
-﻿export type FirmwareSegment = { name: string; offset: number; size: number };
+export type FirmwareSegment = { name: string; offset: number; size: number };
 export function validateSegments(segments: FirmwareSegment[]): string[] {
   const errors: string[] = [];
   const sorted = [...segments].sort((a,b)=>a.offset-b.offset);

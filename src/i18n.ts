@@ -1,4 +1,4 @@
-﻿export type Lang = 'en' | 'zh';
+export type Lang = 'en' | 'zh';
 export const STRINGS = {
   en: {
     eyebrow: 'OPEN SOURCE · LOCAL ONLY · NO LOGIN',
