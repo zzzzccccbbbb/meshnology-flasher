@@ -1,0 +1,10 @@
+﻿{
+  "name": "Meshnology Web Flasher",
+  "short_name": "Meshnology",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#eef2ed",
+  "theme_color": "#cbf04d",
+  "description": "Local-only firmware flasher for ESP32-S3 and Nordic nRF52 via WebUSB.",
+  "icons": []
+}
