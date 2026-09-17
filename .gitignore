@@ -5,3 +5,27 @@ dist
 .env
 .env.*
 !.env.example
+
+# Stage 1.x / Stage 2 dev artifacts (diagnostic screenshots + playwright scripts)
+# These were generated during the v0.2 implementation and are not part of the
+# shipped tool. Keep them out of git to keep the repo clean.
+/diag-*.cjs
+/diag-*.png
+/stage1-screenshot.cjs
+/stage1-en.png
+/stage1-zh.png
+/stage1-narrow-screenshot.cjs
+/stage1-fixed-narrow-*.png
+/stage1x-*.cjs
+/stage1x-*.png
+
+# Pre-existing dev scripts (manually-invoked screenshot/landing-page tooling)
+/render-site.cjs
+/render-logo.cjs
+/check-pages.cjs
+/verify.cjs
+/verify-*.png
+/pages-*.png
+/site-*.png
+/logo-new.png
+/logo-ref-*.png
