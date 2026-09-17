@@ -1,3 +1,590 @@
-:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#17231f;background:#eef2ed;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer;border:0}a{color:inherit}.shell{max-width:1180px;margin:auto;padding:28px 34px}header,footer{display:flex;justify-content:space-between;align-items:center}header{border-bottom:1px solid #d3ddd5;padding-bottom:22px}header a{color:#60706a;text-decoration:none;font-size:13px}header nav{display:flex;gap:22px}.brand img{display:block;height:38px;width:auto}.hero{display:flex;justify-content:space-between;align-items:center;padding:68px 0 54px}.eyebrow{color:#6d8178;font-size:11px;letter-spacing:2px;font-weight:700;margin:0 0 4px}.hero h1{font-size:58px;line-height:1.02;letter-spacing:-3px;margin:6px 0 22px}.hero em{font-style:normal;color:#718079}.lead{max-width:560px;color:#4f5e57;line-height:1.7;font-size:16px}.lead b{color:#17231f}.cta-row{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap}.badges{display:flex;gap:18px;list-style:none;padding:0;margin:22px 0 0;font-size:12px;color:#6d8178}.hero-art{flex-shrink:0}.orb{width:170px;height:170px;border-radius:50%;background:#cbf04d;display:grid;place-items:center;transform:rotate(-12deg);box-shadow:12px 14px 0 #d8e1d8}.orb span{font-size:12px;letter-spacing:2px;text-align:center;font-weight:800;transform:rotate(12deg);line-height:1.4}.grid{display:grid;grid-template-columns:1fr 1.4fr;gap:18px}.card{background:#fff;border:1px solid #dbe3dc;border-radius:18px;padding:26px;box-shadow:0 8px 25px #24352a08}.card-head{display:flex;align-items:center;gap:12px}.step{font:700 11px ui-monospace;color:#95a49c;letter-spacing:1px}.card h2{font-size:17px;margin:0;flex:1}.card p{font-size:13px;color:#82918a;line-height:1.6}.badge{font-size:10px;padding:6px 9px;border-radius:99px;letter-spacing:.5px;text-transform:uppercase}.warn{background:#fff3da;color:#b27818}.ok{background:#e2f5d5;color:#397a2f}.error{background:#ffe1df;color:#aa3831}.btn{padding:13px 17px;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s}.btn:hover{transform:translateY(-1px)}.btn span{margin-left:18px}.primary{background:#c9ef4d;color:#192019}.primary.full{width:100%;margin-top:15px}.dark{background:#18231f;color:#fff}.ghost{background:#fff;color:#17231f;border:1px solid #d3ddd5}.device-info{margin-top:15px;padding:10px;background:#f1f5f0;border-radius:8px;font-size:12px;color:#60706a;font-family:ui-monospace,monospace}.hidden{display:none}.tabs{display:flex;gap:20px;border-bottom:1px solid #e6ebe6;margin:22px 0 16px}.tab{background:none;color:#96a39c;font-size:12px;padding:0 0 10px}.tab.active{color:#17231f;border-bottom:2px solid #c5eb4b;font-weight:700}.drop{border:1.5px dashed #c8d4ca;border-radius:12px;padding:30px;text-align:center;color:#82918a;background:#fafcfa}.drop.drag{background:#f3fbdc;border-color:#9fca3c}.drop b,.drop span{display:block;font-size:12px;margin-top:4px}.drop label{color:#789c22;text-decoration:underline;cursor:pointer}.upload-icon{font-size:24px;color:#9bbd39;margin-bottom:4px}.segments{margin-top:6px}.file-row{display:flex;align-items:center;gap:10px;padding:12px 3px;border-bottom:1px solid #edf1ed}.file-row>div{flex:1}.file-row b,.file-row small{display:block;font-size:12px}.file-row small{color:#91a099;margin-top:4px;font-family:ui-monospace,monospace}.file-row button{background:none;color:#a7b2aa;font-size:19px;width:24px;height:24px}.file-icon{color:#9fc538}.file-row input{width:90px;border:1px solid #d8e1d8;border-radius:4px;padding:2px 4px;font:inherit;font-size:11px;font-family:ui-monospace,monospace}.flash{margin-top:18px}.flash #privacy{font-size:11px;color:#79a335;text-transform:uppercase;letter-spacing:1px;font-weight:700}.flash-row{display:flex;align-items:center;gap:25px}.flash-info{flex:1}.flash-info p{margin:14px 0 10px;color:#66766e;font-size:13px}.progress{height:7px;background:#e7ede7;border-radius:99px;overflow:hidden}.progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,#c5eb4b,#9fc538);transition:width .2s}.flash-info small{display:block;margin-top:9px;color:#99a59f;font:11px ui-monospace,monospace}.notice{margin:18px 0;color:#7a5a1f;background:#fff9e9;border:1px solid #f1e5c4;border-radius:10px;padding:13px 16px;font-size:12px;line-height:1.5}.notice span{margin-left:7px}footer{border-top:1px solid #d3ddd5;padding-top:20px;margin-top:30px;color:#91a099;font-size:11px}@media(max-width:720px){.shell{padding:20px}.hero{padding:40px 0;display:block}.hero h1{font-size:42px;letter-spacing:-2px}.orb{display:none}.grid{grid-template-columns:1fr}.flash-row{display:block}.flash-row .btn{margin-top:18px;width:100%}}
+﻿/* ============================================================
+ * Meshnology Web Flasher v0.2 — styles
+ * 继承 v0.1 的设计 token，三步卡片重排，加 xterm 容器
+ * ============================================================ */
 
-.lang-switch{display:inline-flex;align-items:center;gap:6px;padding-left:14px;border-left:1px solid #d3ddd5;margin-left:6px}.lang-btn{background:none;color:#96a39c;font-size:12px;font-weight:700;letter-spacing:1px;padding:6px 8px;border-radius:6px;transition:all .15s}.lang-btn:hover{color:#17231f;background:#eef2ed}.lang-btn.active{color:#17231f;background:#cbf04d}.lang-sep{color:#d3ddd5;font-size:12px}
+@import "@xterm/xterm/css/xterm.css";
+
+:root {
+  --bg-page: #eef2ed;
+  --bg-card: #ffffff;
+  --border: #d3ddd5;
+  --border-strong: #dbe3dc;
+  --text-body: #17231f;
+  --text-muted: #60706a;
+  --text-soft: #82918a;
+  --text-faint: #91a099;
+  --accent: #c5eb4b;
+  --accent-deep: #9fc538;
+  --accent-warm: #fff3da;
+  --accent-warm-text: #b27818;
+  --accent-ok: #e2f5d5;
+  --accent-ok-text: #397a2f;
+  --accent-err: #ffe1df;
+  --accent-err-text: #aa3831;
+  --terminal-bg: #0f1a17;
+  --terminal-text: #d4e0d9;
+  --shadow-card: 0 8px 25px rgba(36, 53, 42, 0.03);
+  --radius-card: 18px;
+  --radius-input: 8px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+button { font: inherit; cursor: pointer; border: 0; }
+a { color: inherit; }
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text-body);
+  background: var(--bg-page);
+  font-synthesis: none;
+}
+
+/* ============== Layout shell ============== */
+
+.shell {
+  max-width: 1180px;
+  margin: auto;
+  padding: 28px 34px;
+}
+
+header, footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 22px;
+}
+header a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+header nav { display: flex; gap: 22px; }
+.brand img { display: block; height: 38px; width: auto; }
+
+footer {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 30px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* ============== Hero ============== */
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 68px 0 54px;
+}
+.eyebrow {
+  color: #6d8178;
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.hero h1 {
+  font-size: 58px;
+  line-height: 1.02;
+  letter-spacing: -3px;
+  margin: 6px 0 22px;
+}
+.hero em { font-style: normal; color: #718079; }
+.lead {
+  max-width: 560px;
+  color: #4f5e57;
+  line-height: 1.7;
+  font-size: 16px;
+}
+.lead b { color: var(--text-body); }
+.cta-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+  flex-wrap: wrap;
+}
+.badges {
+  display: flex;
+  gap: 18px;
+  list-style: none;
+  padding: 0;
+  margin: 22px 0 0;
+  font-size: 12px;
+  color: #6d8178;
+}
+.hero-art { flex-shrink: 0; }
+.orb {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  transform: rotate(-12deg);
+  box-shadow: 12px 14px 0 #d8e1d8;
+}
+.orb span {
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-align: center;
+  font-weight: 800;
+  transform: rotate(12deg);
+  line-height: 1.4;
+}
+
+/* ============== Card primitives ============== */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: 26px;
+  box-shadow: var(--shadow-card);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card h2 {
+  font-size: 17px;
+  margin: 0;
+  flex: 1;
+}
+.card p {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+/* ============== Step indicator ============== */
+
+.step {
+  font: 700 11px ui-monospace, monospace;
+  color: #95a49c;
+  letter-spacing: 1px;
+  background: #f1f5f0;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+/* ============== Status badges ============== */
+
+.badge {
+  font-size: 10px;
+  padding: 6px 9px;
+  border-radius: 99px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge.warn { background: var(--accent-warm); color: var(--accent-warm-text); }
+.badge.ok { background: var(--accent-ok); color: var(--accent-ok-text); }
+.badge.error { background: var(--accent-err); color: var(--accent-err-text); }
+.badge.idle { background: #f1f5f0; color: var(--text-muted); }
+
+/* ============== Buttons ============== */
+
+.btn {
+  padding: 13px 17px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn span { margin-left: 18px; }
+.btn.primary { background: var(--accent); color: #192019; }
+.btn.primary.full { width: 100%; margin-top: 15px; }
+.btn.dark { background: #18231f; color: #fff; }
+.btn.ghost { background: #fff; color: var(--text-body); border: 1px solid var(--border); }
+.btn.danger { background: var(--accent-err); color: var(--accent-err-text); }
+
+/* ============== Three-step grid ============== */
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.steps-grid .step-card-full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .steps-grid { grid-template-columns: 1fr; }
+}
+
+/* ============== Step 1: serial port ============== */
+
+.serial-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.serial-info {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f1f5f0;
+  border-radius: var(--radius-input);
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+}
+.serial-info.hidden { display: none; }
+
+/* ============== Step 2: file picker + flashConfig ============== */
+
+.tabs {
+  display: flex;
+  gap: 20px;
+  border-bottom: 1px solid #e6ebe6;
+  margin: 22px 0 16px;
+}
+.tab {
+  background: none;
+  color: #96a39c;
+  font-size: 12px;
+  padding: 0 0 10px;
+}
+.tab.active {
+  color: var(--text-body);
+  border-bottom: 2px solid var(--accent);
+  font-weight: 700;
+}
+.drop {
+  border: 1.5px dashed #c8d4ca;
+  border-radius: 12px;
+  padding: 30px;
+  text-align: center;
+  color: var(--text-soft);
+  background: #fafcfa;
+  cursor: pointer;
+}
+.drop.drag {
+  background: #f3fbdc;
+  border-color: #9fca3c;
+}
+.drop b, .drop span {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.drop label {
+  color: #789c22;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.upload-icon {
+  font-size: 24px;
+  color: #9bbd39;
+  margin-bottom: 4px;
+}
+.segments { margin-top: 6px; }
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 3px;
+  border-bottom: 1px solid #edf1ed;
+}
+.file-row > div { flex: 1; }
+.file-row b, .file-row small {
+  display: block;
+  font-size: 12px;
+}
+.file-row small {
+  color: #91a099;
+  margin-top: 4px;
+  font-family: ui-monospace, monospace;
+}
+.file-row button {
+  background: none;
+  color: #a7b2aa;
+  font-size: 19px;
+  width: 24px;
+  height: 24px;
+}
+.file-icon { color: #9fc538; }
+.file-row input {
+  width: 90px;
+  border: 1px solid #d8e1d8;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+
+/* Flash config block */
+.config-block {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #edf1ed;
+}
+.config-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-body);
+  margin-bottom: 4px;
+}
+.config-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.config-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.config-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fafcfa;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-input);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.config-field select:hover { border-color: var(--accent-deep); }
+.config-field select:disabled { opacity: 0.5; cursor: not-allowed; }
+.config-field select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ============== Step 3: flash + terminal ============== */
+
+.flash-card {
+  margin-top: 18px;
+}
+.flash-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.flash-meta .meta-key {
+  font-weight: 700;
+  color: var(--text-body);
+  margin-right: 4px;
+}
+.flash-meta .meta-value {
+  font-family: ui-monospace, monospace;
+}
+
+.flash-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 25px;
+  margin-top: 18px;
+}
+.flash-info {
+  flex: 1;
+  min-width: 0;
+}
+.flash-info .summary {
+  margin: 6px 0 12px;
+  color: #66766e;
+  font-size: 13px;
+}
+.flash-info .summary.error {
+  color: var(--accent-err-text);
+}
+
+.progress {
+  height: 7px;
+  background: #e7ede7;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #c5eb4b, #9fc538);
+  transition: width 0.2s;
+}
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font: 11px ui-monospace, monospace;
+  color: var(--text-faint);
+}
+
+.flash-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Terminal container */
+.terminal-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #edf1ed;
+}
+.terminal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.terminal-head .label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.terminal-container {
+  background: var(--terminal-bg);
+  border-radius: 12px;
+  padding: 14px;
+  min-height: 180px;
+  max-height: 260px;
+  overflow: hidden;
+}
+.terminal-empty {
+  color: #5b6f64;
+  font: 12px ui-monospace, monospace;
+  font-style: italic;
+}
+
+/* ============== Notice ============== */
+
+.notice {
+  margin: 18px 0;
+  color: #7a5a1f;
+  background: #fff9e9;
+  border: 1px solid #f1e5c4;
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.notice span { margin-left: 7px; }
+.notice.hidden { display: none; }
+
+/* ============== Language switcher ============== */
+
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  margin-left: 6px;
+}
+.lang-btn {
+  background: none;
+  color: #96a39c;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.lang-btn:hover {
+  color: var(--text-body);
+  background: var(--bg-page);
+}
+.lang-btn.active {
+  color: var(--text-body);
+  background: var(--accent);
+}
+.lang-sep {
+  color: var(--border);
+  font-size: 12px;
+}
+
+/* ============== Helpers ============== */
+
+.hidden { display: none; }
+
+/* ============== Mobile ============== */
+
+@media (max-width: 720px) {
+  .shell { padding: 20px; }
+  .hero { padding: 40px 0; display: block; }
+  .hero h1 { font-size: 42px; letter-spacing: -2px; }
+  .orb { display: none; }
+
+  /* Step 03: while flashing, pin progress + buttons to viewport bottom.
+     Hidden by default; main.ts adds .is-flashing on <main> when Start flashing is clicked. */
+  .flash-card { position: relative; }
+  .flash-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .flash-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .flash-actions .btn { flex: 1; }
+  main.is-flashing .flash-card .flash-row {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-card);
+    margin: 0;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    box-shadow: 0 -4px 16px rgba(36, 53, 42, 0.08);
+  }
+  /* leave room at bottom so the fixed bar doesn't cover the terminal */
+  main.is-flashing .terminal-container {
+    margin-bottom: 180px;
+  }
+  .terminal-section {
+    margin-top: 10px;
+    padding-top: 12px;
+  }
+  .terminal-container {
+    min-height: 110px;
+    max-height: 160px;
+  }
+
+  .config-grid { grid-template-columns: 1fr; }
+  .flash-meta { font-size: 11px; }
+}
