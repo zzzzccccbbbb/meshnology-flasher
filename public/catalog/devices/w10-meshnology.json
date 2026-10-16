@@ -1,0 +1,18 @@
+{
+  "id": "w10-meshnology",
+  "displayName": "W10 Meshnology (ESP32-S3)",
+  "vendor": "Meshnology",
+  "chip": "ESP32-S3",
+  "flashSize": "16MB",
+  "notes": "Factory firmware for the W10 board",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "size": 1298224,
+      "sha256": "a9866233e7c288b8e21b7c9931f326abae499d0a30e5117289d56b436757be69",
+      "uploaded": "2026-10-16T09:00:00Z",
+      "filename": "w10-meshnology-1.0.0.bin",
+      "notes": "Initial release"
+    }
+  ]
+}

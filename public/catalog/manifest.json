@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-10-16T09:00:00Z",
+  "devices": [
+    {
+      "id": "w10-meshnology",
+      "displayName": "W10 Meshnology (ESP32-S3)",
+      "vendor": "Meshnology",
+      "chip": "ESP32-S3",
+      "latestVersion": "1.0.0",
+      "flashSize": "16MB",
+      "notes": "Factory firmware for the W10 board with PSRAM 8MB"
+    }
+  ]
+}
