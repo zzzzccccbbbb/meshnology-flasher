@@ -1,0 +1,28 @@
+name = "meshnology-flasher"
+compatibility_date = "2025-09-01"
+pages_build_output_dir = "dist"
+
+# R2 bucket for firmware catalog + .bin files.
+# Created in Day 2 via `wrangler r2 bucket create meshnology-flasher-firmware`.
+# Bind name "FIRMWARE" is referenced from functions/ handlers as
+#   env.FIRMWARE.head(...) / env.FIRMWARE.get(...)
+[[r2_buckets]]
+binding = "FIRMWARE"
+bucket_name = "meshnology-flasher-firmware"
+preview_bucket_name = "meshnology-flasher-firmware-preview"
+
+# Compress static assets where possible.
+[build]
+command = "npm run build"
+
+[build.environment]
+NODE_VERSION = "20"
+
+# NOTE: The project must be created in the Cloudflare dashboard first
+# (or `wrangler pages project create meshnology-flasher`) before this
+# file does anything useful. Once created, `wrangler pages deploy` or a
+# GitHub push to main will build and publish from the dist/ directory.
+
+# Day 1 scope: this file proves wrangler can read the config and that
+# the project name matches the Pages project. Day 2 will add the R2
+# binding and the first function; this file is updated in place.
