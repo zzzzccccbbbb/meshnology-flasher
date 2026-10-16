@@ -11,7 +11,6 @@ export const STRINGS = {
     ctaHow: 'How it works',
     badges: ['No account', 'No upload', 'No telemetry'],
     navDocs: 'Docs',
-    navGithub: 'GitHub',
     footer1: 'Meshnology Web Flasher · v0.2.0-preview',
     footer2: 'Firmware never leaves this device · MIT License',
 
@@ -103,7 +102,6 @@ export const STRINGS = {
     ctaHow: '工作原理',
     badges: ['无需账号', '固件不上传', '无任何追踪'],
     navDocs: '文档',
-    navGithub: 'GitHub',
     footer1: 'Meshnology 网页烧录 · v0.2.0-preview',
     footer2: '固件不会离开此设备 · MIT 开源',
 

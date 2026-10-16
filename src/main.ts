@@ -67,7 +67,6 @@ app.innerHTML = `
       </a>
       <nav>
         <a href="#docs" id="navDocs">${t().navDocs}</a>
-        <a href="https://github.com/zzzzccccbbbb/meshnology-flasher" target="_blank" rel="noreferrer" id="navGithub">${t().navGithub} ↗</a>
         <div class="lang-switch" role="tablist" aria-label="Language">
           <button data-lang="en" class="lang-btn${lang === 'en' ? ' active' : ''}" aria-selected="${lang === 'en'}">EN</button>
           <span class="lang-sep">|</span>
@@ -589,7 +588,6 @@ function applyLanguage(next: Lang) {
   document.documentElement.lang = next;
 
   setText('navDocs', t().navDocs);
-  setText('navGithub', `${t().navGithub} ↗`);
   document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach(b => {
     const isActive = b.dataset.lang === next;
     b.classList.toggle('active', isActive);
