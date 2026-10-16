@@ -11,7 +11,7 @@ export const STRINGS = {
     ctaHow: 'How it works',
     badges: ['No account', 'No upload', 'No telemetry'],
     navDocs: 'Docs',
-    footer1: 'Meshnology Web Flasher · v0.2.0-preview',
+    footer1: 'Meshnology Web Flasher · v0.3.0-preview',
     footer2: 'Firmware never leaves this device · MIT License',
 
     // ===== Step 1: Connect serial port =====
@@ -28,15 +28,29 @@ export const STRINGS = {
     step1LogFail: 'Cannot open port. Close other serial monitors and retry.',
     step1LogBoot: 'If the board is not detected, hold the <b>BOOT</b> button while plugging it in.',
 
-    // ===== Step 2: Pick firmware + flashConfig =====
+    // ===== Step 2: Pick firmware (mode A: upload | mode B: catalog) =====
     step2Label: 'Step 02',
-    step2Title: 'Pick firmware & config',
-    step2Desc: 'Drop a single .bin file. esptool-js will auto-detect the chip after you connect.',
+    step2Title: 'Pick firmware',
+    step2DescUpload: 'Drop a single .bin file. esptool-js will auto-detect the chip after you connect.',
+    step2DescCatalog: 'Firmware for this device comes from the prebuilt catalog. SHA-256 is verified before flashing.',
     tabSingle: 'Single merged .bin',
     tabMulti: 'Multiple files + offsets',
     dropTitle: 'Drop .bin files here',
     dropBrowse: 'browse from your computer',
     dropEmpty: 'No file selected yet.',
+    browseCatalog: '…or pick from the device catalog',
+    useLocalBin: '…or use a local .bin file',
+    catalogDeviceLabel: 'Device',
+    catalogVersionLabel: 'Firmware version',
+    catalogLoading: 'Loading catalog…',
+    catalogEmpty: 'No devices in the catalog yet.',
+    catalogDeviceMissing: 'Device not found. Pick another.',
+    catalogVersionMissing: 'Version not found. Showing latest 5.',
+    catalogBackToPicker: '← back to device list',
+    catalogPickAnother: 'Pick another version',
+    catalogBack: '← switch mode',
+    catalogSelected: (deviceName: string, version: string, sizeMB: string) =>
+      `${deviceName} · ${version} · ${sizeMB} MB`,
     configTitle: 'Flash parameters',
     configMode: 'Mode',
     configFreq: 'Frequency',
@@ -51,6 +65,7 @@ export const STRINGS = {
     chipLabel: 'Chip',
     chipUnknown: '— (connect first)',
     flashBtn: 'Start flashing',
+    flashBtnCatalog: (version: string) => `Flash ${version}`,
     abortBtn: 'Cancel',
     progressIdle: 'Ready.',
     progressConnecting: 'Opening serial port…',
@@ -63,6 +78,7 @@ export const STRINGS = {
     progressDone: 'Done.',
     progressCancelled: 'Cancelled.',
     progressEmpty: 'Add a firmware file and connect a board to begin.',
+    progressFetching: (sizeMB: string) => `Fetching firmware (${sizeMB} MB) and verifying SHA-256…`,
     terminalLabel: 'Terminal',
     terminalEmpty: 'No output yet.',
 
@@ -77,8 +93,13 @@ export const STRINGS = {
     errWrite: 'Flash write failed.',
     errVerify: 'MD5 verification failed.',
     errPortDisconnect: 'Serial port disconnected during flash.',
-        errAborted: 'Cancelled by user.',
-        errPortAlreadyOpen: 'Serial port is already open. Close other apps using it (Arduino IDE, PuTTY, etc.) and retry.',
+    errAborted: 'Cancelled by user.',
+    errPortAlreadyOpen: 'Serial port is already open. Close other apps using it (Arduino IDE, PuTTY, etc.) and retry.',
+    errCatalogLoad: 'Failed to load the firmware catalog. Check your network and try again.',
+    errCatalogInvalid: 'Catalog entry is invalid (bad version or sha256).',
+    errFirmwareCorrupted: 'Firmware SHA-256 does not match the catalog entry. Refusing to flash.',
+    errBinSizeMismatch: 'Downloaded size does not match the catalog. CDN may be serving a stale file.',
+    errBinMissing: 'Firmware .bin is in the catalog but not in the deployment. Report this to the owner.',
 
     // ===== Misc =====
     removeAria: 'Remove',
@@ -91,6 +112,7 @@ export const STRINGS = {
       const pct = total > 0 ? Math.floor((written / total) * 100) : 0;
       return `${w} / ${t} (${pct}%)`;
     },
+    formatMb: (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`,
   },
   zh: {
     // ===== Hero / nav =====
@@ -102,7 +124,7 @@ export const STRINGS = {
     ctaHow: '工作原理',
     badges: ['无需账号', '固件不上传', '无任何追踪'],
     navDocs: '文档',
-    footer1: 'Meshnology 网页烧录 · v0.2.0-preview',
+    footer1: 'Meshnology 网页烧录 · v0.3.0-preview',
     footer2: '固件不会离开此设备 · MIT 开源',
 
     // ===== Step 1: Connect serial port =====
@@ -119,15 +141,29 @@ export const STRINGS = {
     step1LogFail: '无法打开串口。请先关闭其他串口监视器后重试。',
     step1LogBoot: '若设备未被识别，请按住 <b>BOOT</b> 键后重新插入设备。',
 
-    // ===== Step 2: Pick firmware + flashConfig =====
+    // ===== Step 2: Pick firmware (mode A: upload | mode B: catalog) =====
     step2Label: '步骤 02',
-    step2Title: '选择固件与参数',
-    step2Desc: '拖入一个 .bin 文件。连接设备后 esptool-js 会自动识别芯片型号。',
+    step2Title: '选择固件',
+    step2DescUpload: '拖入一个 .bin 文件。连接设备后 esptool-js 会自动识别芯片型号。',
+    step2DescCatalog: '该设备的固件来自预置目录。SHA-256 会在烧录前自动校验。',
     tabSingle: '单个合并 .bin',
     tabMulti: '多个文件 + 偏移',
     dropTitle: '拖放 .bin 文件到这里',
     dropBrowse: '从电脑选择',
     dropEmpty: '尚未选择文件。',
+    browseCatalog: '…或从设备目录中选择',
+    useLocalBin: '…或使用本地 .bin 文件',
+    catalogDeviceLabel: '设备',
+    catalogVersionLabel: '固件版本',
+    catalogLoading: '正在加载目录…',
+    catalogEmpty: '目录中暂无设备。',
+    catalogDeviceMissing: '未找到该设备，请选择其他。',
+    catalogVersionMissing: '未找到该版本，显示最近 5 个。',
+    catalogBackToPicker: '← 返回设备列表',
+    catalogPickAnother: '选择其他版本',
+    catalogBack: '← 切换模式',
+    catalogSelected: (deviceName: string, version: string, sizeMB: string) =>
+      `${deviceName} · ${version} · ${sizeMB} MB`,
     configTitle: 'Flash 参数',
     configMode: '模式',
     configFreq: '频率',
@@ -142,6 +178,7 @@ export const STRINGS = {
     chipLabel: '芯片',
     chipUnknown: '—（请先连接）',
     flashBtn: '开始烧录',
+    flashBtnCatalog: (version: string) => `烧录 ${version}`,
     abortBtn: '取消',
     progressIdle: '就绪。',
     progressConnecting: '正在打开串口…',
@@ -154,6 +191,7 @@ export const STRINGS = {
     progressDone: '完成。',
     progressCancelled: '已取消。',
     progressEmpty: '请选择固件文件并连接开发板。',
+    progressFetching: (sizeMB: string) => `正在下载固件（${sizeMB} MB）并校验 SHA-256…`,
     terminalLabel: '终端',
     terminalEmpty: '暂无输出。',
 
@@ -168,8 +206,13 @@ export const STRINGS = {
     errWrite: 'Flash 写入失败。',
     errVerify: 'MD5 校验失败。',
     errPortDisconnect: '烧录过程中串口已断开。',
-        errAborted: '已取消。',
-        errPortAlreadyOpen: '串口已被其他程序占用（Arduino IDE / PuTTY 等）。请关闭后重试。',
+    errAborted: '已取消。',
+    errPortAlreadyOpen: '串口已被其他程序占用（Arduino IDE / PuTTY 等）。请关闭后重试。',
+    errCatalogLoad: '目录加载失败。请检查网络后重试。',
+    errCatalogInvalid: '目录项无效（版本号或 SHA-256 错误）。',
+    errFirmwareCorrupted: '固件 SHA-256 与目录项不一致。拒绝烧录。',
+    errBinSizeMismatch: '下载大小与目录项不一致，CDN 可能返回了旧文件。',
+    errBinMissing: '固件 .bin 在目录中但部署里没有。请联系作者。',
 
     // ===== Misc =====
     removeAria: '移除',
@@ -182,5 +225,6 @@ export const STRINGS = {
       const pct = total > 0 ? Math.floor((written / total) * 100) : 0;
       return `${w} / ${t} (${pct}%)`;
     },
+    formatMb: (bytes: number) => `${(bytes / 1024 / 1024).toFixed(2)} MB`,
   },
 };

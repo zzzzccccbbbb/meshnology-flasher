@@ -6,6 +6,9 @@ import { STRINGS, type Lang } from './i18n';
 import { flashEsp32, type FlashFile, type Phase } from './esp32/flasher';
 import { describeUiConfig } from './esp32/flashConfig';
 import type { ChipCode } from './esp32/chipDetect';
+import { fetchManifest, fetchDevice, CatalogError } from './catalog/api';
+import { downloadFirmware } from './catalog/reader';
+import type { DeviceDetails, FirmwareVersion } from './catalog/types';
 
 /* ---------------------------------------------------------------- *
  *  Types & state
@@ -22,13 +25,42 @@ interface FlashConfig {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 let segments: Segment[] = [];
-let mode: 'single' | 'multi' = 'single';
 let lang: Lang = (localStorage.getItem('meshnology-lang') as Lang) || 'en';
 
 let serialPort: SerialPort | null = null;
 let portInfo: { usbVendorId?: number; usbProductId?: number } | null = null;
 
 let flashConfig: FlashConfig = { mode: 'auto', freq: 'auto', size: 'auto' };
+
+/**
+ * v0.3 source mode:
+ *   'upload'  — user picks a .bin from disk (default when no URL params)
+ *   'catalog' — firmware comes from the prebuilt static catalog
+ * Either way, the Start flashing handler builds a FlashFile[] and
+ * hands it to flashEsp32 — the protocol layer doesn't care.
+ */
+type SourceMode = 'upload' | 'catalog';
+let sourceMode: SourceMode = 'upload';
+
+interface Preselected {
+  deviceId: string | null;
+  version: string | null;
+}
+const urlParams: Preselected = parseUrlParams();
+
+/** In catalog mode, the bytes are fetched from R2 (well, Pages static)
+ *  just before Start flashing, then verified by SHA-256. */
+let catalogFirmware: { deviceId: string; version: FirmwareVersion } | null = null;
+
+function parseUrlParams(): Preselected {
+  const sp = new URLSearchParams(window.location.search);
+  const deviceId = sp.get('device');
+  const version = sp.get('version');
+  return {
+    deviceId: deviceId && /^[a-z0-9][a-z0-9-]{0,40}$/.test(deviceId) ? deviceId : null,
+    version: version && /^\d+\.\d+\.\d+([-+][A-Za-z0-9.-]+)?$/.test(version) ? version : null,
+  };
+}
 
 let term: Terminal | null = null;
 let termFit: FitAddon | null = null;
@@ -116,10 +148,19 @@ app.innerHTML = `
             <span class="step">${t().step2Label}</span>
             <h2>${t().step2Title}</h2>
           </div>
-          <p>${t().step2Desc}</p>
-          <div class="tabs">
-            <button data-mode="single" class="tab active" id="tabSingle">${t().tabSingle}</button>
-            <button data-mode="multi" class="tab" id="tabMulti">${t().tabMulti}</button>
+          <p id="step2Desc">${t().step2DescUpload}</p>
+          <div id="catalogSection" class="catalog-section hidden">
+            <div class="catalog-grid">
+              <div class="config-field">
+                <label id="catalogDeviceLabel">${t().catalogDeviceLabel}</label>
+                <select id="catalogDevice"></select>
+              </div>
+              <div class="config-field">
+                <label id="catalogVersionLabel">${t().catalogVersionLabel}</label>
+                <select id="catalogVersion"></select>
+              </div>
+            </div>
+            <p class="config-hint" id="catalogHint"></p>
           </div>
           <div id="drop" class="drop">
             <div class="upload-icon">↑</div>
@@ -127,6 +168,7 @@ app.innerHTML = `
             <span>${lang === 'zh' ? '或' : 'or'} <label for="fileInput">${t().dropBrowse}</label></span>
             <input id="fileInput" type="file" accept=".bin,application/octet-stream" multiple hidden />
           </div>
+          <button id="browseCatalogBtn" class="btn ghost full" style="margin-top:10px">${t().browseCatalog}</button>
           <div id="segments" class="segments"></div>
 
           <div class="config-block">
@@ -286,6 +328,21 @@ function errorToFriendly(kind: string, msg: string, T: ReturnType<typeof t>): st
   }
 }
 
+function friendlyCatalogError(e: CatalogError, T: ReturnType<typeof t>): string {
+  switch (e.kind) {
+    case 'DEVICE_INVALID':     return T.errCatalogInvalid;
+    case 'SCHEMA_MISMATCH':    return T.errCatalogLoad;
+    case 'PARSE_FAILED':       return T.errCatalogLoad;
+    case 'FETCH_FAILED':       return T.errCatalogLoad;
+    case 'BIN_MISSING':        return T.errBinMissing;
+    case 'BIN_SIZE_MISMATCH':  return T.errBinSizeMismatch;
+    case 'FIRMWARE_CORRUPTED': return T.errFirmwareCorrupted;
+    case 'CATALOG_INVALID':    return T.errCatalogInvalid;
+    case 'SUBTLE_UNAVAILABLE': return T.errCatalogLoad;
+    default:                   return e.message;
+  }
+}
+
 /* ---------------------------------------------------------------- *
  *  Terminal bootstrap (XTerm, read-only)
  * ---------------------------------------------------------------- */
@@ -334,7 +391,7 @@ function renderSegments() {
       <span class="file-icon">▣</span>
       <div>
         <b>${s.name}</b>
-        <small>${formatBytes(s.size)}${mode === 'multi' ? ` · ${T.offsetLabel} <input data-offset="${i}" value="0x${s.offset.toString(16).padStart(4, '0')}" />` : ''}</small>
+        <small>${formatBytes(s.size)}</small>
       </div>
       <button data-remove="${i}" aria-label="${T.removeAria}">×</button>
     </div>
@@ -368,7 +425,7 @@ function renderSegments() {
 async function addFiles(files: FileList | File[]) {
   for (const file of Array.from(files)) {
     if (!file.name.toLowerCase().endsWith('.bin')) continue;
-    segments.push({ name: file.name, size: file.size, offset: mode === 'single' ? 0 : 0x10000, file });
+    segments.push({ name: file.name, size: file.size, offset: 0, file });
   }
   renderSegments();
 }
@@ -383,14 +440,7 @@ drop.addEventListener('drop', e => {
   if (de.dataTransfer) addFiles(de.dataTransfer.files);
 });
 
-document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(tab => {
-  tab.onclick = () => {
-    mode = tab.dataset.mode as 'single' | 'multi';
-    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-    tab.classList.add('active');
-    renderSegments();
-  };
-});
+// (single/multi tabs removed in v0.3 — catalog mode replaces multi)
 
 /* ---------------------------------------------------------------- *
  *  Serial port (Web Serial, NO esptool yet — just open/close)
@@ -472,18 +522,6 @@ flashBtn.addEventListener('click', async () => {
     summaryEl.classList.add('error');
     return;
   }
-  if (!segments.length) {
-    summaryEl.textContent = T.errNoFirmware;
-    summaryEl.classList.add('error');
-    return;
-  }
-  const errs = validateSegments(segments);
-  if (errs.length) {
-    summaryEl.textContent = errs.join(' · ');
-    summaryEl.classList.add('error');
-    return;
-  }
-
   // Stage 2: real flash via esptool.js
   flashBtn.disabled = true;
   abortBtn.classList.remove('hidden');
@@ -509,19 +547,81 @@ flashBtn.addEventListener('click', async () => {
     }
   };
 
-  const total = segments.reduce((n, s) => n + s.size, 0);
+  // Resolve firmware bytes based on the active source mode.
+  //   upload  : user-provided File objects in `segments`
+  //   catalog : download from /firmware/{id}/{version}.bin and verify SHA-256
+  let files: FlashFile[];
+  try {
+    if (sourceMode === 'upload') {
+      if (!segments.length) {
+        summaryEl.textContent = T.errNoFirmware;
+        summaryEl.classList.add('error');
+        flashBtn.disabled = false;
+        abortBtn.classList.add('hidden');
+        mainEl.classList.remove('is-flashing');
+        return;
+      }
+      const segErrs = validateSegments(segments);
+      if (segErrs.length) {
+        summaryEl.textContent = segErrs.join(' · ');
+        summaryEl.classList.add('error');
+        flashBtn.disabled = false;
+        abortBtn.classList.add('hidden');
+        mainEl.classList.remove('is-flashing');
+        return;
+      }
+      files = await Promise.all(
+        segments.map(async (s) => ({
+          name: s.name,
+          bytes: s.file ? new Uint8Array(await s.file.arrayBuffer()) : new Uint8Array(),
+          offset: s.offset,
+        })),
+      );
+    } else {
+      if (!catalogFirmware) {
+        summaryEl.textContent = T.errNoFirmware;
+        summaryEl.classList.add('error');
+        flashBtn.disabled = false;
+        abortBtn.classList.add('hidden');
+        mainEl.classList.remove('is-flashing');
+        return;
+      }
+      const sizeMB = T.formatMb(catalogFirmware.version.size);
+      logEl.textContent = T.progressFetching(sizeMB);
+      termWrite(`[ui] fetching ${catalogFirmware.deviceId} ${catalogFirmware.version.version} (${sizeMB})…`);
+      let downloaded;
+      try {
+        downloaded = await downloadFirmware(catalogFirmware.deviceId, catalogFirmware.version);
+      } catch (e) {
+        const msg = e instanceof CatalogError ? friendlyCatalogError(e, T) : (e as Error).message;
+        summaryEl.textContent = msg;
+        summaryEl.classList.add('error');
+        termWrite(`! ${msg}`);
+        flashBtn.disabled = false;
+        abortBtn.classList.add('hidden');
+        mainEl.classList.remove('is-flashing');
+        return;
+      }
+      termWrite(`[ui] sha-256 verified for ${downloaded.version.filename}`);
+      files = [{
+        name: downloaded.version.filename,
+        bytes: downloaded.bytes,
+        offset: 0,
+      }];
+    }
+  } catch (e) {
+    summaryEl.textContent = (e as Error).message ?? String(e);
+    summaryEl.classList.add('error');
+    flashBtn.disabled = false;
+    abortBtn.classList.add('hidden');
+    mainEl.classList.remove('is-flashing');
+    return;
+  }
+
+  const total = files.reduce((n, f) => n + f.bytes.byteLength, 0);
   progressBytes.textContent = `${formatBytes(0)} / ${formatBytes(total)}`;
   logEl.textContent = T.progressConnecting;
-  termWrite(`[ui] starting flash — files=${segments.length}, total=${formatBytes(total)}, ${describeUiConfig(flashConfig)}`);
-
-  // Read .bin bytes from File objects
-  const files: FlashFile[] = await Promise.all(
-    segments.map(async (s) => ({
-      name: s.name,
-      bytes: s.file ? new Uint8Array(await s.file.arrayBuffer()) : new Uint8Array(),
-      offset: s.offset,
-    })),
-  );
+  termWrite(`[ui] starting flash — files=${files.length}, total=${formatBytes(total)}, ${describeUiConfig(flashConfig)}`);
 
   let lastPhase: Phase = 'connecting';
   try {
@@ -604,3 +704,182 @@ document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach(b => {
 
 document.documentElement.lang = lang;
 renderSegments();
+initCatalogFlow();
+
+/* ---------------------------------------------------------------- *
+ *  v0.3 catalog flow
+ *
+ *  Wires up:
+ *    1. "Browse catalog" button  -> show device picker, fetch manifest
+ *    2. Device <select> change   -> load that device's versions
+ *    3. Version <select> change  -> mark catalogFirmware for download
+ *    4. URL params at load time  -> skip the picker, go straight to
+ *                                    a preselected (device, version) pair
+ *  The Start flashing handler (above) reads catalogFirmware when
+ *  sourceMode === 'catalog'.
+ * ---------------------------------------------------------------- */
+
+function setSourceMode(next: SourceMode) {
+  sourceMode = next;
+  const T = t();
+  const desc = document.getElementById('step2Desc');
+  const drop = document.getElementById('drop');
+  const browseBtn = document.getElementById('browseCatalogBtn') as HTMLButtonElement | null;
+  const catalogSection = document.getElementById('catalogSection');
+  if (desc) desc.innerHTML = next === 'catalog' ? T.step2DescCatalog : T.step2DescUpload;
+  if (drop) drop.classList.toggle('hidden', next === 'catalog');
+  if (browseBtn) browseBtn.textContent = next === 'catalog' ? T.useLocalBin : T.browseCatalog;
+  if (catalogSection) catalogSection.classList.toggle('hidden', next === 'upload');
+  if (next === 'upload') {
+    catalogFirmware = null;
+    updateFlashBtnState();
+  }
+}
+
+async function initCatalogFlow() {
+  const T = t();
+  const browseBtn = document.getElementById('browseCatalogBtn') as HTMLButtonElement | null;
+  if (browseBtn) {
+    browseBtn.addEventListener('click', () => {
+      if (sourceMode === 'upload') {
+        // entering catalog mode
+        setSourceMode('catalog');
+        void loadCatalogPicker();
+      } else {
+        // back to upload mode
+        setSourceMode('upload');
+        renderSegments();
+      }
+    });
+  }
+
+  if (!urlParams.deviceId) {
+    // No URL preset; stay in upload mode until the user clicks "Browse catalog"
+    return;
+  }
+
+  // URL has ?device=xxx[&version=yyy] -> enter catalog mode automatically
+  setSourceMode('catalog');
+  summaryEl.textContent = T.catalogLoading;
+  try {
+    const device = await fetchDevice(urlParams.deviceId);
+    populateVersionDropdown(device);
+    if (urlParams.version) {
+      const found = device.versions.find(v => v.version === urlParams.version);
+      if (found) {
+        await selectCatalogFirmware(device, found);
+        summaryEl.textContent = '';
+      } else {
+        summaryEl.textContent = T.catalogVersionMissing;
+      }
+    } else {
+      summaryEl.textContent = '';
+    }
+  } catch (e) {
+    const msg = e instanceof CatalogError ? friendlyCatalogError(e, T) : (e as Error).message;
+    summaryEl.textContent = msg;
+    summaryEl.classList.add('error');
+  }
+}
+
+async function loadCatalogPicker() {
+  const T = t();
+  summaryEl.textContent = T.catalogLoading;
+  try {
+    const manifest = await fetchManifest();
+    populateDeviceDropdown(manifest);
+    summaryEl.textContent = '';
+  } catch (e) {
+    const msg = e instanceof CatalogError ? friendlyCatalogError(e, T) : (e as Error).message;
+    summaryEl.textContent = msg;
+    summaryEl.classList.add('error');
+  }
+}
+
+function populateDeviceDropdown(manifest: { devices: Array<{ id: string; displayName: string; latestVersion: string }> }) {
+  const sel = document.getElementById('catalogDevice') as HTMLSelectElement | null;
+  if (!sel) return;
+  sel.innerHTML = '';
+  if (!manifest.devices.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = t().catalogEmpty;
+    sel.appendChild(opt);
+    sel.disabled = true;
+    return;
+  }
+  for (const d of manifest.devices) {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = `${d.displayName} (latest ${d.latestVersion})`;
+    sel.appendChild(opt);
+  }
+  sel.disabled = false;
+  sel.onchange = () => {
+    const id = sel.value;
+    if (id) {
+      void (async () => {
+        const T2 = t();
+        try {
+          const device = await fetchDevice(id);
+          populateVersionDropdown(device);
+        } catch (e) {
+          const msg = e instanceof CatalogError ? friendlyCatalogError(e, T2) : (e as Error).message;
+          summaryEl.textContent = msg;
+          summaryEl.classList.add('error');
+        }
+      })();
+    }
+  };
+  // Auto-load first device's versions so the UI is one step ahead
+  if (manifest.devices[0]) {
+    sel.value = manifest.devices[0].id;
+    void fetchDevice(manifest.devices[0].id).then(populateVersionDropdown).catch((e) => {
+      const msg = e instanceof CatalogError ? friendlyCatalogError(e, T) : (e as Error).message;
+      summaryEl.textContent = msg;
+    });
+  }
+}
+
+function populateVersionDropdown(device: DeviceDetails) {
+  const T = t();
+  const sel = document.getElementById('catalogVersion') as HTMLSelectElement | null;
+  const hint = document.getElementById('catalogHint');
+  if (!sel) return;
+  sel.innerHTML = '';
+  if (!device.versions.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = T.catalogEmpty;
+    sel.appendChild(opt);
+    sel.disabled = true;
+    if (hint) hint.textContent = device.displayName;
+    return;
+  }
+  for (const v of device.versions) {
+    const opt = document.createElement('option');
+    opt.value = v.version;
+    opt.textContent = `${v.version} (${T.formatMb(v.size)})`;
+    sel.appendChild(opt);
+  }
+  sel.disabled = false;
+  sel.onchange = () => {
+    const v = device.versions.find(x => x.version === sel.value);
+    if (v) void selectCatalogFirmware(device, v);
+  };
+  if (hint) hint.textContent = device.displayName;
+  // Auto-pick the latest version
+  if (device.versions[0]) {
+    sel.value = device.versions[0].version;
+    void selectCatalogFirmware(device, device.versions[0]);
+  }
+}
+
+async function selectCatalogFirmware(device: DeviceDetails, version: FirmwareVersion) {
+  catalogFirmware = { deviceId: device.id, version };
+  const T = t();
+  const sizeMB = T.formatMb(version.size);
+  summaryEl.textContent = T.catalogSelected(device.displayName, version.version, sizeMB);
+  summaryEl.classList.remove('error');
+  updateFlashBtnState();
+}
