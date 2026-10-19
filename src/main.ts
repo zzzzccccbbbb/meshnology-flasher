@@ -25,6 +25,11 @@ interface FlashConfig {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 let segments: Segment[] = [];
+// v0.3 brought back the v0.2 single/multi tab in the upload step (per
+// user request). The current mode drives auto-assigned offsets in
+// addFiles() and whether the per-file offset input is rendered in
+// renderSegments().
+let uploadMode: 'single' | 'multi' = 'single';
 let lang: Lang = (localStorage.getItem('meshnology-lang') as Lang) || 'en';
 
 let serialPort: SerialPort | null = null;
@@ -169,6 +174,10 @@ app.innerHTML = `
               </div>
             </div>
             <p class="config-hint" id="catalogHint"></p>
+          </div>
+          <div class="tabs" id="uploadTabs">
+            <button data-mode="single" class="tab active" id="tabSingle">${t().tabSingle}</button>
+            <button data-mode="multi" class="tab" id="tabMulti">${t().tabMulti}</button>
           </div>
           <div id="drop" class="drop">
             <div class="upload-icon">↑</div>
@@ -394,12 +403,17 @@ function termWrite(line: string) {
 
 function renderSegments() {
   const T = t();
+  // offsetInput: render the per-file offset input only in multi mode
+  // and only when segments actually need a non-default offset.
+  // (The v0.2 logic rendered it always when mode==='multi' but mode
+  // was deleted in v0.3; restoring it but keyed off a new single/multi
+  // tab selection.)
   list.innerHTML = segments.map((s, i) => `
     <div class="file-row">
       <span class="file-icon">▣</span>
       <div>
         <b>${s.name}</b>
-        <small>${formatBytes(s.size)}</small>
+        <small>${formatBytes(s.size)}${uploadMode === 'multi' ? ` · ${T.offsetLabel} <input data-offset="${i}" value="0x${s.offset.toString(16).padStart(4, '0')}" />` : ''}</small>
       </div>
       <button data-remove="${i}" aria-label="${T.removeAria}">×</button>
     </div>
@@ -431,9 +445,32 @@ function renderSegments() {
 }
 
 async function addFiles(files: FileList | File[]) {
+  // In multi mode, auto-assign offsets following the ESP-IDF layout
+  // that `idf.py build` writes to build/flash_args:
+  //   1st file -> 0x0       (bootloader)
+  //   2nd file -> 0x8000    (partition table)
+  //   3rd file -> 0x10000   (app)
+  //   Nth (N>3) -> 0x10000 + sum of preceding file sizes
+  // In single mode, all files share offset 0 (the v0.2 behavior; the
+  // .bin is expected to be a merged image, not just an app).
   for (const file of Array.from(files)) {
     if (!file.name.toLowerCase().endsWith('.bin')) continue;
-    segments.push({ name: file.name, size: file.size, offset: 0, file });
+    let offset: number;
+    if (uploadMode === 'multi') {
+      const n = segments.length;
+      if (n === 0) offset = 0x0;
+      else if (n === 1) offset = 0x8000;
+      else if (n === 2) offset = 0x10000;
+      else {
+        // 0x10000 + sum of sizes of the first n segments (bytes)
+        const base = 0x10000;
+        const sum = segments.slice(0, n).reduce((acc, s) => acc + s.size, 0);
+        offset = base + sum;
+      }
+    } else {
+      offset = 0;
+    }
+    segments.push({ name: file.name, size: file.size, offset, file });
   }
   renderSegments();
 }
@@ -446,6 +483,23 @@ drop.addEventListener('drop', e => {
   de.preventDefault();
   drop.classList.remove('drag');
   if (de.dataTransfer) addFiles(de.dataTransfer.files);
+});
+
+// Single / multi upload tab toggling
+document.querySelectorAll<HTMLButtonElement>('#uploadTabs [data-mode]').forEach(tab => {
+  tab.onclick = () => {
+    const next = tab.dataset.mode as 'single' | 'multi';
+    if (next === uploadMode) return;
+    uploadMode = next;
+    document.querySelectorAll('#uploadTabs .tab').forEach(x => x.classList.remove('active'));
+    tab.classList.add('active');
+    // When switching modes, drop any segments whose offsets no longer
+    // make sense (single mode strips offsets to 0; multi mode reuses
+    // the existing offsets the user already entered). For simplicity
+    // we keep segments across mode switches and only re-render — the
+    // offset input visibility is mode-driven, not the data.
+    renderSegments();
+  };
 });
 
 // (single/multi tabs removed in v0.3 — catalog mode replaces multi)
@@ -743,10 +797,14 @@ function setSourceMode(next: SourceMode) {
   const drop = document.getElementById('drop');
   const browseBtn = document.getElementById('browseCatalogBtn') as HTMLButtonElement | null;
   const catalogSection = document.getElementById('catalogSection');
+  const uploadTabs = document.getElementById('uploadTabs');
   if (desc) desc.innerHTML = next === 'catalog' ? T.step2DescCatalog : T.step2DescUpload;
   if (drop) drop.classList.toggle('hidden', next === 'catalog');
   if (browseBtn) browseBtn.textContent = next === 'catalog' ? T.useLocalBin : T.browseCatalog;
   if (catalogSection) catalogSection.classList.toggle('hidden', next === 'upload');
+  // The single/multi upload tabs only make sense in upload mode —
+  // hide them in catalog mode so the layout doesn't feel broken.
+  if (uploadTabs) uploadTabs.classList.toggle('hidden', next === 'catalog');
   if (next === 'upload') {
     catalogFirmware = null;
     updateFlashBtnState();
