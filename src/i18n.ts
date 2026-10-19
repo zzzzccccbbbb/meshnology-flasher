@@ -3,15 +3,11 @@ export type Lang = 'en' | 'zh';
 export const STRINGS = {
   en: {
     // ===== Hero / nav =====
-    eyebrow: 'OPEN SOURCE · LOCAL ONLY · NO LOGIN',
-    heroTitle1: 'Flash firmware',
-    heroTitle2: 'without the friction.',
-    lead: 'A 100% client-side flashing tool for the <b>ESP32 family</b> via Web Serial. Your firmware never leaves the browser — esptool-js talks to your board directly.',
-    ctaConnect: 'Connect device',
-    ctaHow: 'How it works',
-    badges: ['No account', 'No upload', 'No telemetry'],
-    navDocs: 'Docs',
-    footer1: 'Meshnology Web Flasher · v0.3.0-preview',
+    // (eyebrow / heroTitle* / lead / ctaConnect / ctaHow / badges /
+    //  navDocs removed in v0.3.1 — the user asked for a leaner page
+    //  with no marketing copy. Only the language switcher remains in
+    //  the header.)
+    footer1: 'Meshnology · Web Flasher',
     footer2: 'Firmware never leaves this device · MIT License',
 
     // ===== Step 1: Connect serial port =====
@@ -116,15 +112,9 @@ export const STRINGS = {
   },
   zh: {
     // ===== Hero / nav =====
-    eyebrow: '开源 · 本地处理 · 无需登录',
-    heroTitle1: '网页烧录',
-    heroTitle2: '从此不再折腾。',
-    lead: '完全在浏览器本地运行的烧录工具，基于 <b>ESP32 全系</b> 与 Web Serial。固件不会上传到任何服务器 —— 通过 esptool-js 直接与开发板通信。',
-    ctaConnect: '连接设备',
-    ctaHow: '工作原理',
-    badges: ['无需账号', '固件不上传', '无任何追踪'],
-    navDocs: '文档',
-    footer1: 'Meshnology 网页烧录 · v0.3.0-preview',
+    // (eyebrow / heroTitle* / lead / ctaConnect / ctaHow / badges /
+    //  navDocs removed — see en above.)
+    footer1: 'Meshnology · 网页烧录',
     footer2: '固件不会离开此设备 · MIT 开源',
 
     // ===== Step 1: Connect serial port =====

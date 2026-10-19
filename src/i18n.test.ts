@@ -12,8 +12,10 @@ describe('i18n strings', () => {
     expect(ek).toEqual(zk);
   });
   it('EN/ZH differ in copy', () => {
-    expect(STRINGS.en.heroTitle1).not.toBe(STRINGS.zh.heroTitle1);
-    expect(STRINGS.en.eyebrow).not.toBe(STRINGS.zh.eyebrow);
+    // Pick a string that's still present in both languages to spot-check
+    // that the two locales didn't silently collapse to the same text.
+    expect(STRINGS.en.step1Title).not.toBe(STRINGS.zh.step1Title);
+    expect(STRINGS.en.terminalLabel).not.toBe(STRINGS.zh.terminalLabel);
   });
   it('filesCount formats plural correctly', () => {
     expect(STRINGS.en.filesCount(1)).toBe('1 file');

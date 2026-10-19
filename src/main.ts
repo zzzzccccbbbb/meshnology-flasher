@@ -107,11 +107,7 @@ function vendorName(vid?: number): string {
 app.innerHTML = `
   <div class="shell">
     <header>
-      <a class="brand" href="#" aria-label="Meshnology home">
-        <img src="/logo.svg" alt="Meshnology" width="180" height="38" />
-      </a>
       <nav>
-        <a href="#docs" id="navDocs">${t().navDocs}</a>
         <div class="lang-switch" role="tablist" aria-label="Language">
           <button data-lang="en" class="lang-btn${lang === 'en' ? ' active' : ''}" aria-selected="${lang === 'en'}">EN</button>
           <span class="lang-sep">|</span>
@@ -121,26 +117,6 @@ app.innerHTML = `
     </header>
 
     <main>
-      <section class="hero">
-        <div>
-          <p class="eyebrow">${t().eyebrow}</p>
-          <h1>${t().heroTitle1}<br><em>${t().heroTitle2}</em></h1>
-          <p class="lead">${t().lead}</p>
-          <div class="cta-row">
-            <button class="btn primary" id="cta-connect">${t().ctaConnect} →</button>
-            <a class="btn ghost" href="#step-1" id="ctaHow">${t().ctaHow}</a>
-          </div>
-          <ul class="badges">
-            <li>● ${t().badges[0]}</li>
-            <li>● ${t().badges[1]}</li>
-            <li>● ${t().badges[2]}</li>
-          </ul>
-        </div>
-        <div class="hero-art" aria-hidden="true">
-          <div class="orb"><span>LOCAL<br/>ONLY</span></div>
-        </div>
-      </section>
-
       <section class="steps-grid">
         <!-- Step 01: Connect -->
         <div class="card" id="step-1">
@@ -758,7 +734,6 @@ function applyLanguage(next: Lang) {
   localStorage.setItem('meshnology-lang', next);
   document.documentElement.lang = next;
 
-  setText('navDocs', t().navDocs);
   document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach(b => {
     const isActive = b.dataset.lang === next;
     b.classList.toggle('active', isActive);
