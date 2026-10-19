@@ -55,8 +55,8 @@ export const STRINGS = {
     configMode: 'Mode',
     configFreq: 'Frequency',
     configSize: 'Flash size',
-    configAuto: 'Auto (recommended)',
-    configHint: 'esptool.js will pick a safe default after chip detection.',
+    configAuto: 'Auto',
+    configHint: 'Defaults are ESP32-S3 safe (DIO / 80 MHz / 16 MB). Pick "Auto" only if your chip reports those values on its own.',
 
     // ===== Step 3: Flash + terminal =====
     step3Label: 'Step 03',
@@ -168,8 +168,8 @@ export const STRINGS = {
     configMode: '模式',
     configFreq: '频率',
     configSize: '容量',
-    configAuto: '自动（推荐）',
-    configHint: '连接设备后，esptool-js 会选择安全的默认值。',
+    configAuto: '自动',
+    configHint: '默认是 ESP32-S3 安全值（DIO / 80 MHz / 16 MB）。只有当芯片自动报告这些值时才选"自动"。',
 
     // ===== Step 3: Flash + terminal =====
     step3Label: '步骤 03',

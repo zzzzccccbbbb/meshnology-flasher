@@ -30,7 +30,15 @@ let lang: Lang = (localStorage.getItem('meshnology-lang') as Lang) || 'en';
 let serialPort: SerialPort | null = null;
 let portInfo: { usbVendorId?: number; usbProductId?: number } | null = null;
 
-let flashConfig: FlashConfig = { mode: 'auto', freq: 'auto', size: 'auto' };
+// v0.3: defaults changed from "auto/auto/auto" to "DIO/80m/16mb".
+// In v0.2 the auto-detect path would silently skip writing on some
+// boards (chip ID read worked, but SPI flash param read came back
+// empty, so the write failed before reporting). Picking safe ESP32-S3
+// values matches the esptool.py `flash_args` file that ESP-IDF
+// produces for these chips, and removes the silent-failure mode.
+// Users on chips that need a different setting (QIO, 40m, 8mb) can
+// still override the dropdown.
+let flashConfig: FlashConfig = { mode: 'DIO', freq: '80m', size: '16mb' };
 
 /**
  * v0.3 source mode:
