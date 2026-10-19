@@ -512,7 +512,16 @@ cfgSize.onchange = () => { flashConfig.size = cfgSize.value; };
  * ---------------------------------------------------------------- */
 
 function updateFlashBtnState() {
-  flashBtn.disabled = !(segments.length > 0 && serialPort);
+  // Button enable depends on the current source mode:
+  //   upload  — at least one .bin segment + a serial port
+  //   catalog — a preselected firmware (from URL or dropdown) + a serial port
+  // In both cases, no port = no flash.
+  const hasPort = !!serialPort;
+  if (sourceMode === 'catalog') {
+    flashBtn.disabled = !(hasPort && catalogFirmware !== null);
+  } else {
+    flashBtn.disabled = !(hasPort && segments.length > 0);
+  }
 }
 
 flashBtn.addEventListener('click', async () => {
