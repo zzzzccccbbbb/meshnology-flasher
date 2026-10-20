@@ -35,9 +35,10 @@ export const STRINGS = {
     // ===== Step 2: Pick firmware (mode A: upload | mode B: catalog) =====
     step2Label: 'Step 02',
     step2Title: 'Pick firmware',
-    step2DescUpload: 'Drop a single .bin file. esptool-js will auto-detect the chip after you connect.',
-    step2DescCatalog: 'Firmware for this device comes from the prebuilt catalog. SHA-256 is verified before flashing.',
-    tabSingle: 'Single merged .bin',
+    // v0.3.4: step2DescUpload / step2DescCatalog were removed — the
+        // per-mode description paragraph under the firmware column title was
+        // redundant with the two source tabs right below it.
+        tabSingle: 'Single merged .bin',
     tabMulti: 'Multiple files + offsets',
     dropTitle: 'Drop .bin files here',
     dropBrowse: 'browse from your computer',
@@ -155,9 +156,8 @@ export const STRINGS = {
     // ===== Step 2: Pick firmware (mode A: upload | mode B: catalog) =====
     step2Label: '步骤 02',
     step2Title: '选择固件',
-    step2DescUpload: '拖入一个 .bin 文件。连接设备后 esptool-js 会自动识别芯片型号。',
-    step2DescCatalog: '该设备的固件来自预置目录。SHA-256 会在烧录前自动校验。',
-    tabSingle: '单个合并 .bin',
+    // v0.3.4: step2DescUpload / step2DescCatalog 已删除（见 en 说明）
+        tabSingle: '单个合并 .bin',
     tabMulti: '多个文件 + 偏移',
     dropTitle: '拖放 .bin 文件到这里',
     dropBrowse: '从电脑选择',

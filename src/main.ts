@@ -149,8 +149,6 @@ app.innerHTML = `
             <span class="col-icon">▣</span><span data-i18n="colFirmware">${t().colFirmware}</span>
           </div>
 
-          <p id="step2Desc">${t().step2DescUpload}</p>
-
           <!-- Source mode: local upload vs. device catalog -->
           <div class="tabs source-tabs" id="sourceTabs">
             <button data-source="upload" class="tab active" id="srcUpload" data-i18n="srcUpload">${t().srcUpload}</button>
@@ -826,12 +824,9 @@ initCatalogFlow();
 
 function setSourceMode(next: SourceMode) {
   sourceMode = next;
-  const T = t();
-  const desc = document.getElementById('step2Desc');
   const catalogSection = document.getElementById('catalogSection');
   const uploadSection = document.getElementById('uploadSection');
   const sourceTabs = document.getElementById('sourceTabs');
-  if (desc) desc.innerHTML = next === 'catalog' ? T.step2DescCatalog : T.step2DescUpload;
   if (catalogSection) catalogSection.classList.toggle('hidden', next !== 'catalog');
   if (uploadSection) uploadSection.classList.toggle('hidden', next !== 'upload');
   // Reflect the active source in the two mode tabs. The single/multi
