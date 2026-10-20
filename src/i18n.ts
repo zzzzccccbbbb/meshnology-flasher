@@ -16,7 +16,8 @@ export const STRINGS = {
         colDevice: 'Connect device',
         colFirmware: 'Select firmware',
         burnSingle: 'Flash single file',
-        burnMulti: 'Flash multi file',
+                burnMulti: 'Flash multi file',
+                burnCatalog: 'Flash device firmware',
 
     // ===== Step 1: Connect serial port =====
     step1Label: 'Step 01',
@@ -137,7 +138,8 @@ export const STRINGS = {
         colDevice: '连接设备',
         colFirmware: '选择固件文件',
         burnSingle: '单文件烧录',
-        burnMulti: '多文件烧录',
+                burnMulti: '多文件烧录',
+                burnCatalog: '烧录设备固件',
 
     // ===== Step 1: Connect serial port =====
     step1Label: '步骤 01',

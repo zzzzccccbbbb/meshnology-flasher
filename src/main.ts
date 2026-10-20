@@ -223,15 +223,14 @@ app.innerHTML = `
         </div>
       </section>
 
-      <!-- 16302-style bottom burn row: two large primary buttons -->
+      <!-- One burn button; its label follows the selected source + upload mode. -->
       <section class="burn-row" id="step-3">
         <div class="burn-meta" id="flashMeta">
           <span><span class="meta-key">${t().chipLabel}:</span><span class="meta-value" id="chipValue2">${t().chipUnknown}</span></span>
         </div>
 
         <div class="burn-buttons">
-          <button id="flashBtnSingle" class="btn burn primary-burn" data-i18n="burnSingle">${t().burnSingle}</button>
-          <button id="flashBtnMulti" class="btn burn warn-burn" data-i18n="burnMulti">${t().burnMulti}</button>
+          <button id="flashBtn" class="btn burn primary-burn" data-i18n="burnSingle">${t().burnSingle}</button>
           <button id="abortBtn" class="btn danger hidden" data-i18n="abortBtn">${t().abortBtn}</button>
         </div>
 
@@ -287,8 +286,7 @@ const summaryEl = $('#summary');
 const bar = $('#bar');
 const logEl = $('#log');
 const progressBytes = $('#progressBytes');
-const flashBtnSingle = $<HTMLButtonElement>('#flashBtnSingle');
-const flashBtnMulti = $<HTMLButtonElement>('#flashBtnMulti');
+const flashBtn = $<HTMLButtonElement>('#flashBtn');
 const abortBtn = $<HTMLButtonElement>('#abortBtn');
 const chipValue = $('#chipValue');
 const chipValue2 = $('#chipValue2');
@@ -490,6 +488,8 @@ document.querySelectorAll<HTMLButtonElement>('#uploadTabs [data-mode]').forEach(
     // we keep segments across mode switches and only re-render — the
     // offset input visibility is mode-driven, not the data.
     renderSegments();
+    // The burn button's label follows the mode, so refresh it too.
+    updateFlashBtnState();
   };
 });
 
@@ -556,47 +556,43 @@ cfgFreq.onchange = () => { flashConfig.freq = cfgFreq.value; };
 cfgSize.onchange = () => { flashConfig.size = cfgSize.value; };
 
 /* ---------------------------------------------------------------- *
- *  Flash button gating + click handler (Stage 1: still fake animation)
+ *  Flash button gating + click handler
  * ---------------------------------------------------------------- */
 
+/** Label for the single burn button. It follows the active selection so
+ *  the button always says what it is about to do:
+ *    upload  + single -> one merged .bin at 0x0
+ *    upload  + multi  -> N files at their own offsets
+ *    catalog           -> the catalog build for the chosen device
+ */
+function burnButtonLabel(T: ReturnType<typeof t>): string {
+  if (sourceMode === 'catalog') return T.burnCatalog;
+  return uploadMode === 'multi' ? T.burnMulti : T.burnSingle;
+}
+
 function updateFlashBtnState() {
-  // Button enable depends on the current source mode:
-  //   upload  — at least one .bin segment + a serial port
+  // Button enable depends on the current selection:
+  //   upload  — at least one .bin segment + a serial port. In multi mode
+  //             a single file is still valid (one image at its offset),
+  //             so only "no files" disables it.
   //   catalog — a preselected firmware (from URL or dropdown) + a serial port
   // In both cases, no port = no flash.
   const hasPort = !!serialPort;
-  if (sourceMode === 'catalog') {
-    const ok = hasPort && catalogFirmware !== null;
-    flashBtnSingle.disabled = !ok;
-    flashBtnMulti.disabled = !ok;
-  } else {
-    const ok = hasPort && segments.length > 0;
-    flashBtnSingle.disabled = !ok;
-    // Multi burn needs at least 2 files, otherwise it is the same as single.
-    flashBtnMulti.disabled = !(ok && segments.length > 1);
-  }
+  const ready = sourceMode === 'catalog'
+    ? hasPort && catalogFirmware !== null
+    : hasPort && segments.length > 0;
+  flashBtn.disabled = !ready;
+  flashBtn.textContent = burnButtonLabel(t());
 }
 
-/** Enable/disable both burn buttons together (they always run the same
- *  pipeline; multi only differs by forcing uploadMode to 'multi'). */
 function setBurnDisabled(disabled: boolean): void {
-  flashBtnSingle.disabled = disabled;
-  flashBtnMulti.disabled = disabled;
+  flashBtn.disabled = disabled;
 }
 
-flashBtnSingle.addEventListener('click', () => void runFlash(false));
-flashBtnMulti.addEventListener('click', () => void runFlash(true));
+flashBtn.addEventListener('click', () => void runFlash());
 
-/** Run the flash flow. forceMulti=true switches uploadMode to multi
- *  before collecting files, mirroring 16302's two big burn buttons. */
-async function runFlash(forceMulti: boolean): Promise<void> {
-  if (forceMulti && uploadMode !== 'multi') {
-    uploadMode = 'multi';
-    document.querySelectorAll<HTMLButtonElement>('#uploadTabs .tab').forEach(b => {
-      b.classList.toggle('active', (b.dataset.mode as UploadMode) === 'multi');
-    });
-    renderSegments();
-  }
+/** Run the flash flow with whatever source + upload mode is selected. */
+async function runFlash(): Promise<void> {
   const T = t();
   if (!serialPort) {
     summaryEl.textContent = T.errNoPort;
@@ -839,8 +835,8 @@ function setSourceMode(next: SourceMode) {
   }
   if (next === 'upload') {
     catalogFirmware = null;
-    updateFlashBtnState();
   }
+  updateFlashBtnState();
 }
 
 async function initCatalogFlow() {

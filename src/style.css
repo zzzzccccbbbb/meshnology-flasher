@@ -200,8 +200,8 @@ footer {
   flex-wrap: wrap;
 }
 .btn.burn {
-  flex: 1 1 220px;
-  height: 44px;
+  flex: 1 1 auto;
+  min-height: 44px;
   font-size: 15px;
   font-weight: 700;
   border-radius: 7px;
@@ -215,13 +215,9 @@ footer {
   background: #2f7fd4;
   color: #fff;
 }
-.warn-burn {
-  background: #e8b93c;
-  color: #2b2205;
-}
 .btn.burn + .btn.danger {
   flex: 0 0 auto;
-  height: 44px;
+  min-height: 44px;
   padding: 0 18px;
 }
 
