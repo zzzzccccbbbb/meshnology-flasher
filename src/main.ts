@@ -117,27 +117,40 @@ app.innerHTML = `
     </header>
 
     <main>
-      <section class="steps-grid">
-        <!-- Step 01: Connect -->
-        <div class="card" id="step-1">
-          <div class="card-head">
-            <span class="step">${t().step1Label}</span>
-            <h2>${t().step1Title}</h2>
-            <span id="serialStatus" class="badge idle">${t().step1StatusDisc}</span>
+      <div class="page-head">
+        <h2 data-i18n="pageTitle">${t().pageTitle}</h2>
+        <p data-i18n="pageDesc">${t().pageDesc}</p>
+      </div>
+
+      <!-- 16302-style two-column file box: left 35% = device/serial,
+           right 65% = firmware selection + flash config -->
+      <section class="file-box">
+        <div class="file-col file-left">
+          <div class="col-title col-title-type">
+            <span class="col-icon">▤</span><span data-i18n="colDevice">${t().colDevice}</span>
           </div>
-          <p>${t().step1Desc}</p>
-          <button id="serialConnect" class="btn primary full">${t().step1Btn} <span>→</span></button>
+
+          <div id="serialStatus" class="badge idle">${t().step1StatusDisc}</div>
+
+          <button id="serialConnect" class="btn primary full"><span data-i18n="step1Btn">${t().step1Btn}</span> <span>→</span></button>
           <div id="serialInfo" class="serial-info hidden"></div>
           <small id="serialLog" style="display:block;margin-top:10px;color:var(--text-faint);font:11px ui-monospace,monospace">${t().step1LogChoose}</small>
+
+          <div class="chip-selected">
+            <div class="chip-selected-inner">
+              <span class="chip-selected-label" data-i18n="chipLabel">${t().chipLabel}</span>
+              <span class="chip-selected-value" id="chipValue">${t().chipUnknown}</span>
+            </div>
+          </div>
         </div>
 
-        <!-- Step 02: Firmware + config -->
-        <div class="card">
-          <div class="card-head">
-            <span class="step">${t().step2Label}</span>
-            <h2>${t().step2Title}</h2>
+        <div class="file-col file-right">
+          <div class="col-title col-title-file">
+            <span class="col-icon">▣</span><span data-i18n="colFirmware">${t().colFirmware}</span>
           </div>
+
           <p id="step2Desc">${t().step2DescUpload}</p>
+
           <div id="catalogSection" class="catalog-section hidden">
             <div class="catalog-grid">
               <div class="config-field">
@@ -151,27 +164,28 @@ app.innerHTML = `
             </div>
             <p class="config-hint" id="catalogHint"></p>
           </div>
+
           <div class="tabs" id="uploadTabs">
-            <button data-mode="single" class="tab active" id="tabSingle">${t().tabSingle}</button>
-            <button data-mode="multi" class="tab" id="tabMulti">${t().tabMulti}</button>
+            <button data-mode="single" class="tab active" id="tabSingle" data-i18n="tabSingle">${t().tabSingle}</button>
+            <button data-mode="multi" class="tab" id="tabMulti" data-i18n="tabMulti">${t().tabMulti}</button>
           </div>
           <div id="drop" class="drop">
             <div class="upload-icon">↑</div>
-            <b id="dropTitle">${t().dropTitle}</b>
-            <span>${lang === 'zh' ? '或' : 'or'} <label for="fileInput">${t().dropBrowse}</label></span>
+            <b id="dropTitle" data-i18n="dropTitle">${t().dropTitle}</b>
+            <span>${lang === 'zh' ? '或' : 'or'} <label for="fileInput" data-i18n="dropBrowse">${t().dropBrowse}</label></span>
             <input id="fileInput" type="file" accept=".bin,application/octet-stream" multiple hidden />
           </div>
-          <button id="browseCatalogBtn" class="btn ghost full" style="margin-top:10px">${t().browseCatalog}</button>
+          <button id="browseCatalogBtn" class="btn ghost full" style="margin-top:10px" data-i18n="browseCatalog">${t().browseCatalog}</button>
           <div id="segments" class="segments"></div>
 
           <div class="config-block">
             <div class="config-title">
-              <span>${t().configTitle}</span>
+              <span data-i18n="configTitle">${t().configTitle}</span>
             </div>
-            <p class="config-hint">${t().configHint}</p>
+            <p class="config-hint" data-i18n="configHint">${t().configHint}</p>
             <div class="config-grid">
               <div class="config-field">
-                <label for="cfgMode">${t().configMode}</label>
+                <label for="cfgMode" data-i18n="configMode">${t().configMode}</label>
                 <select id="cfgMode">
                   <option value="auto">${t().configAuto}</option>
                   <option value="QIO">QIO</option>
@@ -181,7 +195,7 @@ app.innerHTML = `
                 </select>
               </div>
               <div class="config-field">
-                <label for="cfgFreq">${t().configFreq}</label>
+                <label for="cfgFreq" data-i18n="configFreq">${t().configFreq}</label>
                 <select id="cfgFreq">
                   <option value="auto">${t().configAuto}</option>
                   <option value="40m">40 MHz</option>
@@ -189,7 +203,7 @@ app.innerHTML = `
                 </select>
               </div>
               <div class="config-field">
-                <label for="cfgSize">${t().configSize}</label>
+                <label for="cfgSize" data-i18n="configSize">${t().configSize}</label>
                 <select id="cfgSize">
                   <option value="auto">${t().configAuto}</option>
                   <option value="1mb">1 MB</option>
@@ -202,39 +216,35 @@ app.innerHTML = `
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Step 03: Flash + terminal -->
-        <div class="card step-card-full flash-card" id="step-3">
-          <div class="card-head">
-            <span class="step">${t().step3Label}</span>
-            <h2>${t().step3Title}</h2>
-          </div>
-          <p>${t().step3Desc}</p>
-          <div class="flash-meta" id="flashMeta">
-            <span><span class="meta-key">${t().chipLabel}:</span><span class="meta-value" id="chipValue">${t().chipUnknown}</span></span>
-          </div>
-          <div class="flash-row">
-            <div class="flash-info">
-              <p class="summary" id="summary">${t().progressEmpty}</p>
-              <div class="progress"><i id="bar"></i></div>
-              <div class="progress-meta">
-                <span id="log">${t().progressIdle}</span>
-                <span id="progressBytes">0 B / 0 B</span>
-              </div>
-            </div>
-            <div class="flash-actions">
-              <button id="flashBtn" class="btn dark" disabled>${t().flashBtn} <span>→</span></button>
-              <button id="abortBtn" class="btn danger hidden">${t().abortBtn}</button>
-            </div>
-          </div>
+      <!-- 16302-style bottom burn row: two large primary buttons -->
+      <section class="burn-row" id="step-3">
+        <div class="burn-meta" id="flashMeta">
+          <span><span class="meta-key">${t().chipLabel}:</span><span class="meta-value" id="chipValue2">${t().chipUnknown}</span></span>
+        </div>
 
-          <div class="terminal-section">
-            <div class="terminal-head">
-              <span class="label">${t().terminalLabel}</span>
-            </div>
-            <div class="terminal-container" id="termContainer">
-              <div class="terminal-empty" id="termEmpty">${t().terminalEmpty}</div>
-            </div>
+        <div class="burn-buttons">
+          <button id="flashBtnSingle" class="btn burn primary-burn" data-i18n="burnSingle">${t().burnSingle}</button>
+          <button id="flashBtnMulti" class="btn burn warn-burn" data-i18n="burnMulti">${t().burnMulti}</button>
+          <button id="abortBtn" class="btn danger hidden" data-i18n="abortBtn">${t().abortBtn}</button>
+        </div>
+
+        <div class="flash-progress">
+          <p class="summary" id="summary">${t().progressEmpty}</p>
+          <div class="progress"><i id="bar"></i></div>
+          <div class="progress-meta">
+            <span id="log">${t().progressIdle}</span>
+            <span id="progressBytes">0 B / 0 B</span>
+          </div>
+        </div>
+
+        <div class="terminal-section">
+          <div class="terminal-head">
+            <span class="label" data-i18n="terminalLabel">${t().terminalLabel}</span>
+          </div>
+          <div class="terminal-container" id="termContainer">
+            <div class="terminal-empty" id="termEmpty">${t().terminalEmpty}</div>
           </div>
         </div>
       </section>
@@ -272,9 +282,11 @@ const summaryEl = $('#summary');
 const bar = $('#bar');
 const logEl = $('#log');
 const progressBytes = $('#progressBytes');
-const flashBtn = $<HTMLButtonElement>('#flashBtn');
+const flashBtnSingle = $<HTMLButtonElement>('#flashBtnSingle');
+const flashBtnMulti = $<HTMLButtonElement>('#flashBtnMulti');
 const abortBtn = $<HTMLButtonElement>('#abortBtn');
 const chipValue = $('#chipValue');
+const chipValue2 = $('#chipValue2');
 
 const cfgMode = $<HTMLSelectElement>('#cfgMode');
 const cfgFreq = $<HTMLSelectElement>('#cfgFreq');
@@ -282,8 +294,6 @@ const cfgSize = $<HTMLSelectElement>('#cfgSize');
 
 const termContainer = $('#termContainer');
 const termEmpty = $('#termEmpty');
-
-const cta = $<HTMLButtonElement>('#cta-connect');
 
 /* ---------------------------------------------------------------- *
  *  Helpers
@@ -532,11 +542,6 @@ serialConnectBtn.addEventListener('click', async () => {
   else await doSerialConnect();
 });
 
-cta.addEventListener('click', () => {
-  document.querySelector('#step-1')?.scrollIntoView({ behavior: 'smooth' });
-  if (!serialPort) doSerialConnect();
-});
-
 /* ---------------------------------------------------------------- *
  *  FlashConfig wiring
  * ---------------------------------------------------------------- */
@@ -556,13 +561,37 @@ function updateFlashBtnState() {
   // In both cases, no port = no flash.
   const hasPort = !!serialPort;
   if (sourceMode === 'catalog') {
-    flashBtn.disabled = !(hasPort && catalogFirmware !== null);
+    const ok = hasPort && catalogFirmware !== null;
+    flashBtnSingle.disabled = !ok;
+    flashBtnMulti.disabled = !ok;
   } else {
-    flashBtn.disabled = !(hasPort && segments.length > 0);
+    const ok = hasPort && segments.length > 0;
+    flashBtnSingle.disabled = !ok;
+    // Multi burn needs at least 2 files, otherwise it is the same as single.
+    flashBtnMulti.disabled = !(ok && segments.length > 1);
   }
 }
 
-flashBtn.addEventListener('click', async () => {
+/** Enable/disable both burn buttons together (they always run the same
+ *  pipeline; multi only differs by forcing uploadMode to 'multi'). */
+function setBurnDisabled(disabled: boolean): void {
+  flashBtnSingle.disabled = disabled;
+  flashBtnMulti.disabled = disabled;
+}
+
+flashBtnSingle.addEventListener('click', () => void runFlash(false));
+flashBtnMulti.addEventListener('click', () => void runFlash(true));
+
+/** Run the flash flow. forceMulti=true switches uploadMode to multi
+ *  before collecting files, mirroring 16302's two big burn buttons. */
+async function runFlash(forceMulti: boolean): Promise<void> {
+  if (forceMulti && uploadMode !== 'multi') {
+    uploadMode = 'multi';
+    document.querySelectorAll<HTMLButtonElement>('#uploadTabs .tab').forEach(b => {
+      b.classList.toggle('active', (b.dataset.mode as UploadMode) === 'multi');
+    });
+    renderSegments();
+  }
   const T = t();
   if (!serialPort) {
     summaryEl.textContent = T.errNoPort;
@@ -570,7 +599,7 @@ flashBtn.addEventListener('click', async () => {
     return;
   }
   // Stage 2: real flash via esptool.js
-  flashBtn.disabled = true;
+  setBurnDisabled(true);
   abortBtn.classList.remove('hidden');
   abortBtn.disabled = false;
   bar.style.width = '0%';
@@ -603,7 +632,7 @@ flashBtn.addEventListener('click', async () => {
       if (!segments.length) {
         summaryEl.textContent = T.errNoFirmware;
         summaryEl.classList.add('error');
-        flashBtn.disabled = false;
+        setBurnDisabled(false);
         abortBtn.classList.add('hidden');
         mainEl.classList.remove('is-flashing');
         return;
@@ -612,7 +641,7 @@ flashBtn.addEventListener('click', async () => {
       if (segErrs.length) {
         summaryEl.textContent = segErrs.join(' · ');
         summaryEl.classList.add('error');
-        flashBtn.disabled = false;
+        setBurnDisabled(false);
         abortBtn.classList.add('hidden');
         mainEl.classList.remove('is-flashing');
         return;
@@ -628,7 +657,7 @@ flashBtn.addEventListener('click', async () => {
       if (!catalogFirmware) {
         summaryEl.textContent = T.errNoFirmware;
         summaryEl.classList.add('error');
-        flashBtn.disabled = false;
+        setBurnDisabled(false);
         abortBtn.classList.add('hidden');
         mainEl.classList.remove('is-flashing');
         return;
@@ -644,7 +673,7 @@ flashBtn.addEventListener('click', async () => {
         summaryEl.textContent = msg;
         summaryEl.classList.add('error');
         termWrite(`! ${msg}`);
-        flashBtn.disabled = false;
+        setBurnDisabled(false);
         abortBtn.classList.add('hidden');
         mainEl.classList.remove('is-flashing');
         return;
@@ -659,7 +688,7 @@ flashBtn.addEventListener('click', async () => {
   } catch (e) {
     summaryEl.textContent = (e as Error).message ?? String(e);
     summaryEl.classList.add('error');
-    flashBtn.disabled = false;
+    setBurnDisabled(false);
     abortBtn.classList.add('hidden');
     mainEl.classList.remove('is-flashing');
     return;
@@ -692,7 +721,11 @@ flashBtn.addEventListener('click', async () => {
         },
         onLog: (line) => termWrite(line),
         onChip: (code: ChipCode, name: string) => {
-          chipValue.textContent = `${name} (${code})`;
+          // Two chip readouts in the new layout: the "已选芯片" chip in
+          // the left file-box column, and the meta line in the burn row.
+          const txt = `${name} (${code})`;
+          chipValue.textContent = txt;
+          chipValue2.textContent = txt;
         },
         onError: (kind, msg) => {
           const friendly = errorToFriendly(kind, msg, T);
@@ -711,13 +744,13 @@ flashBtn.addEventListener('click', async () => {
     }
   }
 
-  flashBtn.disabled = false;
+  setBurnDisabled(false);
   abortBtn.classList.add('hidden');
   mainEl.classList.remove('is-flashing');
-});
+}
 
 abortBtn.addEventListener('click', () => {
-  flashBtn.disabled = false;
+  setBurnDisabled(false);
   abortBtn.classList.add('hidden');
   mainEl.classList.remove('is-flashing');
   bar.style.width = '0%';
@@ -740,7 +773,29 @@ function applyLanguage(next: Lang) {
     b.setAttribute('aria-selected', String(isActive));
   });
 
-  // simple page-wide re-render to swap i18n strings
+  // Swap every static string in place. The shell HTML is built once at
+  // module load (DOM refs below are captured once), so a full re-render
+  // would orphan them; data-i18n keeps the language switch cheap and safe.
+  const T = t();
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n as keyof typeof STRINGS[Lang];
+    const val = T[key];
+    if (typeof val === 'string') el.textContent = val;
+  });
+
+  // The drop-zone separator word ("or") is inline in the shell markup and
+  // has no i18n key of its own; patch it directly.
+  const dropBrowse = document.querySelector<HTMLElement>('[data-i18n="dropBrowse"]');
+  if (dropBrowse?.parentElement) {
+    dropBrowse.parentElement.childNodes[0].textContent = next === 'zh' ? ' 或 ' : ' or ';
+  }
+
+  // Live regions that hold runtime state are refreshed by their own
+  // update paths; only the static fallbacks need a nudge here.
+  setText('serialStatus', T.step1StatusDisc);
+  setText('dropTitle', T.dropTitle);
+  setText('chipValue', T.chipUnknown);
+  setText('chipValue2', T.chipUnknown);
   renderSegments();
 }
 

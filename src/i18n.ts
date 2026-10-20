@@ -8,7 +8,15 @@ export const STRINGS = {
     //  with no marketing copy. Only the language switcher remains in
     //  the header.)
     footer1: 'Meshnology · Web Flasher',
-    footer2: 'Firmware never leaves this device · MIT License',
+        footer2: 'Firmware never leaves this device · MIT License',
+
+        // ===== 16302-style page head + two-column file box =====
+        pageTitle: 'Firmware Flashing Tool',
+        pageDesc: 'Flash local firmware straight from the browser with no extra software — supports the whole ESP32 family over Web Serial.',
+        colDevice: 'Connect device',
+        colFirmware: 'Select firmware',
+        burnSingle: 'Flash single file',
+        burnMulti: 'Flash multi file',
 
     // ===== Step 1: Connect serial port =====
     step1Label: 'Step 01',
@@ -115,7 +123,15 @@ export const STRINGS = {
     // (eyebrow / heroTitle* / lead / ctaConnect / ctaHow / badges /
     //  navDocs removed — see en above.)
     footer1: 'Meshnology · 网页烧录',
-    footer2: '固件不会离开此设备 · MIT 开源',
+        footer2: '固件不会离开此设备 · MIT 开源',
+
+        // ===== 16302 风格页头 + 双列 file-box =====
+        pageTitle: '本地固件烧录工具',
+        pageDesc: '无需安装任何软件，直接在浏览器里把本地固件烧录到设备中，支持 ESP32 全系芯片。',
+        colDevice: '连接设备',
+        colFirmware: '选择固件文件',
+        burnSingle: '单文件烧录',
+        burnMulti: '多文件烧录',
 
     // ===== Step 1: Connect serial port =====
     step1Label: '步骤 01',

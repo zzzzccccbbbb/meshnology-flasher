@@ -78,41 +78,159 @@ footer {
    file in the same commit. If you ever want to bring marketing copy
    back, see the v0.2 git tag.) */
 
-/* ============== Card primitives ============== */
+/* ============== 16302-style page head ============== */
 
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-card);
-  padding: 26px;
-  box-shadow: var(--shadow-card);
+.page-head {
+  margin: 4px 0 14px;
 }
-.card-head {
+.page-head h2 {
+  font-size: 22px;
+  margin: 0 0 4px;
+  letter-spacing: -0.4px;
+}
+.page-head p {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 760px;
+}
+
+/* ============== 16302-style two-column file box ============== */
+
+.file-box {
+  display: flex;
+  align-items: stretch;
+  border: 4px solid #e8b93c;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.file-col {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.file-left {
+  flex: 0 0 32%;
+  max-width: 32%;
+  background: color-mix(in srgb, #e8b93c 8%, var(--bg-card));
+  border-right: 1px solid color-mix(in srgb, #e8b93c 45%, transparent);
+}
+.file-right {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.col-title {
   display: flex;
   align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  padding-bottom: 8px;
+  color: var(--text-body);
+}
+.col-title-type {
+  border-bottom: 3px solid color-mix(in srgb, var(--text-muted) 50%, transparent);
+}
+.col-title-file {
+  border-bottom: 3px solid color-mix(in srgb, #e8b93c 62%, transparent);
+}
+.col-icon {
+  color: #c99a12;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.file-left #serialStatus {
+  align-self: flex-start;
+}
+.file-left .serial-info {
+  font-size: 12px;
+}
+
+.chip-selected { margin-top: auto; }
+.chip-selected-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-card);
+  padding: 8px 10px;
+}
+.chip-selected-label {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8a6d05;
+  background: color-mix(in srgb, #e8b93c 20%, transparent);
+  padding: 4px 7px;
+  border-radius: 5px;
+}
+.chip-selected-value {
+  font-size: 12px;
+  color: var(--text-body);
+  word-break: break-word;
+}
+
+/* ============== 16302-style bottom burn row ============== */
+
+.burn-row {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  margin-top: 14px;
 }
-.card h2 {
-  font-size: 17px;
-  margin: 0;
-  flex: 1;
+.burn-meta {
+  font-size: 12px;
+  color: var(--text-muted);
 }
-.card p {
-  font-size: 13px;
-  color: var(--text-soft);
-  line-height: 1.6;
+.burn-meta .meta-key { color: var(--text-faint); }
+.burn-meta .meta-value { color: var(--text-body); font-weight: 600; }
+
+.burn-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.btn.burn {
+  flex: 1 1 220px;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.btn.burn:hover:not(:disabled) { filter: brightness(0.95); }
+.btn.burn:disabled { opacity: 0.45; cursor: not-allowed; }
+.primary-burn {
+  background: #2f7fd4;
+  color: #fff;
+}
+.warn-burn {
+  background: #e8b93c;
+  color: #2b2205;
+}
+.btn.burn + .btn.danger {
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 18px;
 }
 
-/* ============== Step indicator ============== */
+.flash-progress { display: flex; flex-direction: column; gap: 7px; }
+.flash-progress .summary { margin: 0; }
 
-.step {
-  font: 700 11px ui-monospace, monospace;
-  color: #95a49c;
-  letter-spacing: 1px;
-  background: #f1f5f0;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
+/* v0.3.2: .card / .card-head / .card h2 / .card p / .step were removed
+   together with the 3-card layout. The .file-box (two columns, one
+   4px #e8b93c border, 10px radius) replaces them. */
 
 /* ============== Status badges ============== */
 
@@ -152,28 +270,12 @@ footer {
 .btn.ghost { background: #fff; color: var(--text-body); border: 1px solid var(--border); }
 .btn.danger { background: var(--accent-err); color: var(--accent-err-text); }
 
-/* ============== Three-step grid ============== */
-
-.steps-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-}
-.steps-grid .step-card-full {
-  grid-column: 1 / -1;
-}
-@media (max-width: 900px) {
-  .steps-grid { grid-template-columns: 1fr; }
-}
+/* v0.3.2: .steps-grid / .step-card-full / the 900px breakpoint were
+   removed with the 3-card layout. The .file-box + .burn-row layout
+   stacks on its own (see the 720px block at the end of this file). */
 
 /* ============== Step 1: serial port ============== */
 
-.serial-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}
 .serial-info {
   margin-top: 12px;
   padding: 10px 12px;
@@ -328,42 +430,17 @@ footer {
 
 /* ============== Step 3: flash + terminal ============== */
 
-.flash-card {
-  margin-top: 18px;
-}
-.flash-meta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font-size: 12px;
-  color: var(--text-muted);
-  flex-wrap: wrap;
-}
-.flash-meta .meta-key {
-  font-weight: 700;
-  color: var(--text-body);
-  margin-right: 4px;
-}
-.flash-meta .meta-value {
-  font-family: ui-monospace, monospace;
-}
+/* v0.3.2: .flash-card / .flash-meta / .flash-row / .flash-info are gone.
+   .burn-meta and .flash-progress (see the burn-row block near the top)
+   replaced them. .progress / .progress-meta are still used, inside
+   .flash-progress. */
 
-.flash-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 25px;
-  margin-top: 18px;
-}
-.flash-info {
-  flex: 1;
-  min-width: 0;
-}
-.flash-info .summary {
-  margin: 6px 0 12px;
+.flash-progress .summary {
+  margin: 0;
   color: #66766e;
   font-size: 13px;
 }
-.flash-info .summary.error {
+.flash-progress .summary.error {
   color: var(--accent-err-text);
 }
 
@@ -388,11 +465,8 @@ footer {
   color: var(--text-faint);
 }
 
-.flash-actions {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-}
+/* v0.3.2: .flash-actions was removed — the burn buttons live in
+   .burn-buttons now. */
 
 /* Terminal container */
 .terminal-section {
@@ -484,20 +558,19 @@ footer {
 @media (max-width: 720px) {
   .shell { padding: 20px; }
 
-  /* Step 03: while flashing, pin progress + buttons to viewport bottom.
-     Hidden by default; main.ts adds .is-flashing on <main> when Start flashing is clicked. */
-  .flash-card { position: relative; }
-  .flash-row {
+  /* v0.3.2: the old .flash-card / .flash-row / .flash-actions mobile
+     rules were removed together with the 3-card layout. The pinned
+     flash bar now lives on .burn-row instead. */
+  .burn-row {
+    position: relative;
+  }
+  .burn-buttons {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
-  }
-  .flash-actions {
-    display: flex;
     gap: 10px;
   }
-  .flash-actions .btn { flex: 1; }
-  main.is-flashing .flash-card .flash-row {
+  main.is-flashing .burn-row .burn-buttons,
+  main.is-flashing .burn-row .flash-progress {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -505,14 +578,14 @@ footer {
     z-index: 100;
     background: var(--bg-card);
     margin: 0;
-    padding: 14px 20px;
+    padding: 12px 20px;
     border-top: 1px solid var(--border);
-    border-bottom: none;
     box-shadow: 0 -4px 16px rgba(36, 53, 42, 0.08);
   }
-  /* leave room at bottom so the fixed bar doesn't cover the terminal */
+  main.is-flashing .burn-row .flash-progress { bottom: 108px; }
+  /* leave room at the bottom so the fixed bars don't cover the terminal */
   main.is-flashing .terminal-container {
-    margin-bottom: 180px;
+    margin-bottom: 200px;
   }
   .terminal-section {
     margin-top: 10px;
@@ -522,6 +595,20 @@ footer {
     min-height: 110px;
     max-height: 160px;
   }
+
+  /* collapse the two-column file box to one column on narrow screens */
+  .file-box {
+    flex-direction: column;
+  }
+  .file-left {
+    flex: 1 1 auto;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid color-mix(in srgb, #e8b93c 45%, transparent);
+  }
+  .chip-selected { margin-top: 6px; }
+
+  .page-head h2 { font-size: 19px; }
 
   .config-grid { grid-template-columns: 1fr; }
   .flash-meta { font-size: 11px; }
