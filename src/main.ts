@@ -151,6 +151,12 @@ app.innerHTML = `
 
           <p id="step2Desc">${t().step2DescUpload}</p>
 
+          <!-- Source mode: local upload vs. device catalog -->
+          <div class="tabs source-tabs" id="sourceTabs">
+            <button data-source="upload" class="tab active" id="srcUpload" data-i18n="srcUpload">${t().srcUpload}</button>
+            <button data-source="catalog" class="tab" id="srcCatalog" data-i18n="srcCatalog">${t().srcCatalog}</button>
+          </div>
+
           <div id="catalogSection" class="catalog-section hidden">
             <div class="catalog-grid">
               <div class="config-field">
@@ -165,18 +171,19 @@ app.innerHTML = `
             <p class="config-hint" id="catalogHint"></p>
           </div>
 
-          <div class="tabs" id="uploadTabs">
-            <button data-mode="single" class="tab active" id="tabSingle" data-i18n="tabSingle">${t().tabSingle}</button>
-            <button data-mode="multi" class="tab" id="tabMulti" data-i18n="tabMulti">${t().tabMulti}</button>
+          <div id="uploadSection">
+            <div class="tabs" id="uploadTabs">
+              <button data-mode="single" class="tab active" id="tabSingle" data-i18n="tabSingle">${t().tabSingle}</button>
+              <button data-mode="multi" class="tab" id="tabMulti" data-i18n="tabMulti">${t().tabMulti}</button>
+            </div>
+            <div id="drop" class="drop">
+              <div class="upload-icon">↑</div>
+              <b id="dropTitle" data-i18n="dropTitle">${t().dropTitle}</b>
+              <span><span id="dropOr">${lang === 'zh' ? '或' : 'or'}</span> <label for="fileInput" data-i18n="dropBrowse">${t().dropBrowse}</label></span>
+              <input id="fileInput" type="file" accept=".bin,application/octet-stream" multiple hidden />
+            </div>
+            <div id="segments" class="segments"></div>
           </div>
-          <div id="drop" class="drop">
-            <div class="upload-icon">↑</div>
-            <b id="dropTitle" data-i18n="dropTitle">${t().dropTitle}</b>
-            <span>${lang === 'zh' ? '或' : 'or'} <label for="fileInput" data-i18n="dropBrowse">${t().dropBrowse}</label></span>
-            <input id="fileInput" type="file" accept=".bin,application/octet-stream" multiple hidden />
-          </div>
-          <button id="browseCatalogBtn" class="btn ghost full" style="margin-top:10px" data-i18n="browseCatalog">${t().browseCatalog}</button>
-          <div id="segments" class="segments"></div>
 
           <div class="config-block">
             <div class="config-title">
@@ -783,12 +790,9 @@ function applyLanguage(next: Lang) {
     if (typeof val === 'string') el.textContent = val;
   });
 
-  // The drop-zone separator word ("or") is inline in the shell markup and
-  // has no i18n key of its own; patch it directly.
-  const dropBrowse = document.querySelector<HTMLElement>('[data-i18n="dropBrowse"]');
-  if (dropBrowse?.parentElement) {
-    dropBrowse.parentElement.childNodes[0].textContent = next === 'zh' ? ' 或 ' : ' or ';
-  }
+  // The drop-zone separator word ("or") is a bare text node with no i18n
+  // key of its own; patch it directly.
+  setText('dropOr', next === 'zh' ? '或' : 'or');
 
   // Live regions that hold runtime state are refreshed by their own
   // update paths; only the static fallbacks need a nudge here.
@@ -824,17 +828,20 @@ function setSourceMode(next: SourceMode) {
   sourceMode = next;
   const T = t();
   const desc = document.getElementById('step2Desc');
-  const drop = document.getElementById('drop');
-  const browseBtn = document.getElementById('browseCatalogBtn') as HTMLButtonElement | null;
   const catalogSection = document.getElementById('catalogSection');
-  const uploadTabs = document.getElementById('uploadTabs');
+  const uploadSection = document.getElementById('uploadSection');
+  const sourceTabs = document.getElementById('sourceTabs');
   if (desc) desc.innerHTML = next === 'catalog' ? T.step2DescCatalog : T.step2DescUpload;
-  if (drop) drop.classList.toggle('hidden', next === 'catalog');
-  if (browseBtn) browseBtn.textContent = next === 'catalog' ? T.useLocalBin : T.browseCatalog;
-  if (catalogSection) catalogSection.classList.toggle('hidden', next === 'upload');
-  // The single/multi upload tabs only make sense in upload mode —
-  // hide them in catalog mode so the layout doesn't feel broken.
-  if (uploadTabs) uploadTabs.classList.toggle('hidden', next === 'catalog');
+  if (catalogSection) catalogSection.classList.toggle('hidden', next !== 'catalog');
+  if (uploadSection) uploadSection.classList.toggle('hidden', next !== 'upload');
+  // Reflect the active source in the two mode tabs. The single/multi
+  // upload tabs live inside #uploadSection, which is hidden wholesale
+  // in catalog mode, so they need no separate visibility handling.
+  if (sourceTabs) {
+    sourceTabs.querySelectorAll<HTMLButtonElement>('.tab').forEach(b => {
+      b.classList.toggle('active', (b.dataset.source as SourceMode) === next);
+    });
+  }
   if (next === 'upload') {
     catalogFirmware = null;
     updateFlashBtnState();
@@ -842,19 +849,20 @@ function setSourceMode(next: SourceMode) {
 }
 
 async function initCatalogFlow() {
-  const T = t();
-  const browseBtn = document.getElementById('browseCatalogBtn') as HTMLButtonElement | null;
-  if (browseBtn) {
-    browseBtn.addEventListener('click', () => {
-      if (sourceMode === 'upload') {
-        // entering catalog mode
-        setSourceMode('catalog');
-        void loadCatalogPicker();
-      } else {
-        // back to upload mode
-        setSourceMode('upload');
-        renderSegments();
-      }
+  const sourceTabs = document.getElementById('sourceTabs');
+  if (sourceTabs) {
+    sourceTabs.querySelectorAll<HTMLButtonElement>('.tab').forEach(b => {
+      b.addEventListener('click', () => {
+        const next = b.dataset.source as SourceMode;
+        if (next === sourceMode) return;
+        if (next === 'catalog') {
+          setSourceMode('catalog');
+          void loadCatalogPicker();
+        } else {
+          setSourceMode('upload');
+          renderSegments();
+        }
+      });
     });
   }
 

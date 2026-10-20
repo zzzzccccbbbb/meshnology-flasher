@@ -43,7 +43,12 @@ export const STRINGS = {
     dropBrowse: 'browse from your computer',
     dropEmpty: 'No file selected yet.',
     browseCatalog: '…or pick from the device catalog',
-    useLocalBin: '…or use a local .bin file',
+        useLocalBin: '…or use a local .bin file',
+        // v0.3.3: browseCatalog / useLocalBin are no longer referenced — the
+        // ghost "...or pick from the device catalog" button was replaced by
+        // a real two-tab source switch (srcUpload / srcCatalog).
+        srcUpload: 'Local upload',
+        srcCatalog: 'Pick a device',
     catalogDeviceLabel: 'Device',
     catalogVersionLabel: 'Firmware version',
     catalogLoading: 'Loading catalog…',
@@ -158,7 +163,10 @@ export const STRINGS = {
     dropBrowse: '从电脑选择',
     dropEmpty: '尚未选择文件。',
     browseCatalog: '…或从设备目录中选择',
-    useLocalBin: '…或使用本地 .bin 文件',
+        useLocalBin: '…或使用本地 .bin 文件',
+        // 见上方 en 说明：browseCatalog / useLocalBin 已不再被引用
+        srcUpload: '本地上传',
+        srcCatalog: '选择设备',
     catalogDeviceLabel: '设备',
     catalogVersionLabel: '固件版本',
     catalogLoading: '正在加载目录…',

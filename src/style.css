@@ -295,6 +295,33 @@ footer {
   border-bottom: 1px solid #e6ebe6;
   margin: 22px 0 16px;
 }
+/* v0.3.3: the source switch (local upload / pick a device) is the primary
+   mode choice, so it gets pill buttons instead of the underlined text
+   tabs used by the nested single/multi switch. */
+.tabs.source-tabs {
+  gap: 8px;
+  border-bottom: none;
+  margin: 4px 0 14px;
+}
+.source-tabs .tab {
+  flex: 1 1 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.source-tabs .tab:hover { border-color: var(--accent); }
+.source-tabs .tab.active {
+  color: var(--text-body);
+  border-color: var(--accent);
+  border-bottom-width: 1px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+}
 .tab {
   background: none;
   color: #96a39c;
