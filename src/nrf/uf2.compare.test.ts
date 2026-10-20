@@ -16,27 +16,30 @@ const HEX = resolve(__dirname, '../../.tmp-w13.hex');
 const REF = resolve(__dirname, '../../.tmp-w13-ref.uf2');
 const ready = existsSync(HEX) && existsSync(REF);
 
-describe.skipIf(!ready)('vs Microsoft uf2conv.py (real)', () => {
-  const ours = packUf2(trimTrailingErased(toSparseImage(parseIntelHex(readFileSync(HEX, 'utf8')))));
-  const ref = readFileSync(REF);
+/** Lazy: describe.skipIf only skips the it() blocks, not the describe body,
+ *  so the fixtures must not be read until a test actually runs. */
+const ours = () => packUf2(trimTrailingErased(toSparseImage(parseIntelHex(readFileSync(HEX, 'utf8')))));
+const ref = () => readFileSync(REF);
 
+describe.skipIf(!ready)('vs Microsoft uf2conv.py (real)', () => {
   it('reports the size difference', () => {
-    console.log(`  ours ${ours.length} B (${ours.length / 512} blocks)`);
-    console.log(`  ref  ${ref.length} B (${ref.length / 512} blocks)`);
-    expect(ours.length % 512).toBe(0);
-    expect(ref.length % 512).toBe(0);
+    const a = ours(), b = ref();
+    console.log(`  ours ${a.length} B (${a.length / 512} blocks)`);
+    console.log(`  ref  ${b.length} B (${b.length / 512} blocks)`);
+    expect(a.length % 512).toBe(0);
+    expect(b.length % 512).toBe(0);
   });
 
   it('produces a block count at least as large as the reference', () => {
     // We fill gaps with 0xFF; uf2conv may emit fewer blocks by skipping
     // fully-erased regions. More blocks is safe (the bootloader writes 0xFF
     // over erased flash), so this is the direction we want to be in.
-    expect(ours.length).toBeGreaterThanOrEqual(ref.length);
+    expect(ours().length).toBeGreaterThanOrEqual(ref().length);
   });
 
   it('writes identical payload bytes for every block the reference emits', () => {
-    const refInfo = readUf2(ref);
-    const ourInfo = readUf2(ours);
+    const refInfo = readUf2(ref());
+    const ourInfo = readUf2(ours());
 
     const oursByAddr = new Map(ourInfo.blocks.map(b => [b.targetAddr, b.payload]));
     let compared = 0;

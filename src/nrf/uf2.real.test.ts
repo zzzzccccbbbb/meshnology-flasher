@@ -6,31 +6,22 @@ import {
   NRF52840_FAMILY_ID,
 } from './uf2';
 
-/**
- * Real-firmware check against the actual W13 build output.
- *
- * The fixture is not committed (1.2 MB); when it is absent the test skips so
- * `npm test` stays green on machines that don't have the W13 checkout. To run
- * it for real:
- *
- *   wsl -d Ubuntu-22.04 bash -lc 'cat ~/platformIO/w13/w13/w13_factory.hex' \
- *     | tr -d '\0' > .tmp-w13.hex
- *   npx vitest run src/nrf/uf2.real.test.ts
- */
 const FIXTURE = resolve(__dirname, '../../.tmp-w13.hex');
 const hasFixture = existsSync(FIXTURE);
 
-describe.skipIf(!hasFixture)('W13 factory firmware (real)', () => {
-  const hexText = readFileSync(FIXTURE, 'utf8');
+/** Lazy: describe.skipIf only skips the it() blocks, not the describe body,
+ *  so the file must not be read until a test actually runs. */
+const hexText = () => readFileSync(FIXTURE, 'utf8');
 
+describe.skipIf(!hasFixture)('W13 factory firmware (real)', () => {
   it('parses every record without error', () => {
-    const segs = parseIntelHex(hexText);
+    const segs = parseIntelHex(hexText());
     expect(segs.length).toBeGreaterThan(10000);
     expect(segs.reduce((n, s) => n + s.data.length, 0)).toBeGreaterThan(100000);
   });
 
   it('covers both the SoftDevice region and the app at 0x27000', () => {
-    const segs = parseIntelHex(hexText);
+    const segs = parseIntelHex(hexText());
     const img = trimTrailingErased(toSparseImage(segs));
 
     // The W13 hex contains the whole protected layout: SoftDevice S140 v7
@@ -59,7 +50,7 @@ describe.skipIf(!hasFixture)('W13 factory firmware (real)', () => {
   });
 
   it('produces a contiguous, correctly sized UF2', () => {
-    const segs = parseIntelHex(hexText);
+    const segs = parseIntelHex(hexText());
     const img = trimTrailingErased(toSparseImage(segs));
     const uf2 = packUf2(img);
     const info = readUf2(uf2);
@@ -76,7 +67,7 @@ describe.skipIf(!hasFixture)('W13 factory firmware (real)', () => {
   });
 
   it('packs to a plausible download size', () => {
-    const segs = parseIntelHex(hexText);
+    const segs = parseIntelHex(hexText());
     const img = trimTrailingErased(toSparseImage(segs));
     const uf2 = packUf2(img);
     // UF2 is 2x the payload, so a 1.2 MB HEX should land around 2.4 MB.
