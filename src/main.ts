@@ -6,6 +6,11 @@ import { STRINGS, type Lang } from './i18n';
 import { flashEsp32, type FlashFile, type Phase } from './esp32/flasher';
 import { describeUiConfig } from './esp32/flashConfig';
 import type { ChipCode } from './esp32/chipDetect';
+import { hexToUf2, HexParseError, NRF52840_FAMILY_ID, readUf2 } from './nrf/uf2';
+import {
+  flashUf2, isWebUsbAvailable, requestUf2Device, uf2ErrorToMessage,
+  type Uf2DeviceInfo,
+} from './nrf/uf2Transport';
 import { fetchManifest, fetchDevice, CatalogError } from './catalog/api';
 import { downloadFirmware } from './catalog/reader';
 import type { DeviceDetails, FirmwareVersion } from './catalog/types';
@@ -54,6 +59,24 @@ let flashConfig: FlashConfig = { mode: 'DIO', freq: '80m', size: '16mb' };
  */
 type SourceMode = 'upload' | 'catalog';
 let sourceMode: SourceMode = 'upload';
+
+/**
+ * Chip family drives the whole flashing pipeline, not just labels:
+ *   esp32    — .bin over Web Serial through esptool.js's ROM loader
+ *   nrf52840 — .hex/.uf2 written to a UF2 bootloader over WebUSB
+ * The two paths share nothing below this point, so the branch is made once,
+ * here, instead of being threaded through every helper.
+ */
+type ChipFamily = 'esp32' | 'nrf52840';
+let chipFamily: ChipFamily = 'esp32';
+/** The bootloader handle, once the user has picked it. */
+let nrfDevice: unknown = null;
+/**
+ * Cooperative cancel flag shared with the transports. The nRF path polls it
+ * between block-status reads; the esptool.js path has no equivalent hook,
+ * which is why its abort button closes the port instead.
+ */
+const abortFlag = { aborted: false };
 
 interface Preselected {
   deviceId: string | null;
@@ -135,6 +158,15 @@ app.innerHTML = `
           <button id="serialConnect" class="btn primary full"><span data-i18n="step1Btn">${t().step1Btn}</span> <span>→</span></button>
           <div id="serialInfo" class="serial-info hidden"></div>
           <small id="serialLog" style="display:block;margin-top:10px;color:var(--text-faint);font:11px ui-monospace,monospace">${t().step1LogChoose}</small>
+
+          <div class="config-field" style="margin-top:4px">
+            <label for="chipFamily" data-i18n="chipFamilyLabel">${t().chipFamilyLabel}</label>
+            <select id="chipFamily">
+              <option value="esp32" selected>${t().chipFamilyEsp32}</option>
+              <option value="nrf52840">${t().chipFamilyNrf}</option>
+            </select>
+            <p class="config-hint" id="chipFamilyHint" data-i18n="chipFamilyHintEsp">${t().chipFamilyHintEsp}</p>
+          </div>
 
           <div class="chip-selected">
             <div class="chip-selected-inner">
@@ -290,6 +322,8 @@ const flashBtn = $<HTMLButtonElement>('#flashBtn');
 const abortBtn = $<HTMLButtonElement>('#abortBtn');
 const chipValue = $('#chipValue');
 const chipValue2 = $('#chipValue2');
+const chipFamilySel = $<HTMLSelectElement>('#chipFamily');
+const chipFamilyHint = $('#chipFamilyHint');
 
 const cfgMode = $<HTMLSelectElement>('#cfgMode');
 const cfgFreq = $<HTMLSelectElement>('#cfgFreq');
@@ -433,6 +467,11 @@ function renderSegments() {
   updateFlashBtnState();
 }
 
+const ALLOWED_EXT = {
+    esp32: ['.bin'],
+    nrf52840: ['.hex', '.uf2'],
+  } as const;
+
 async function addFiles(files: FileList | File[]) {
   // In multi mode, auto-assign offsets following the ESP-IDF layout
   // that `idf.py build` writes to build/flash_args:
@@ -442,8 +481,14 @@ async function addFiles(files: FileList | File[]) {
   //   Nth (N>3) -> 0x10000 + sum of preceding file sizes
   // In single mode, all files share offset 0 (the v0.2 behavior; the
   // .bin is expected to be a merged image, not just an app).
+  //
+  // nRF52840 has no offsets to assign: a .hex carries its own addresses and
+  // is packed into a .uf2 whose blocks each name their target, so the offset
+  // column stays at 0 and the single/multi tabs are hidden for that family.
+  const allowed = ALLOWED_EXT[chipFamily] as readonly string[];
   for (const file of Array.from(files)) {
-    if (!file.name.toLowerCase().endsWith('.bin')) continue;
+    const lower = file.name.toLowerCase();
+    if (!allowed.some(ext => lower.endsWith(ext))) continue;
     let offset: number;
     if (uploadMode === 'multi') {
       const n = segments.length;
@@ -543,9 +588,54 @@ async function doSerialDisconnect() {
 }
 
 serialConnectBtn.addEventListener('click', async () => {
+  if (chipFamily === 'nrf52840') {
+    await doNrfBootConnect();
+    return;
+  }
   if (serialPort) await doSerialDisconnect();
   else await doSerialConnect();
 });
+
+/**
+ * nRF52840: pick the UF2 bootloader over WebUSB.
+ *
+ * The bootloader is not a serial port — it is a USB device with a HID
+ * interface — so this deliberately does not reuse the Web Serial path. The
+ * handle is stored until the next flash; the bootloader resets the board
+ * itself once the write lands, so there is nothing to disconnect.
+ */
+async function doNrfBootConnect() {
+  const T = t();
+  if (!isWebUsbAvailable()) {
+    serialStatus.className = 'badge error';
+    serialStatus.textContent = 'WebUSB unavailable';
+    summaryEl.textContent = 'This browser has no WebUSB. Use Chrome or Edge.';
+    summaryEl.classList.add('error');
+    return;
+  }
+  serialStatus.className = 'badge busy';
+  serialStatus.textContent = T.catalogLoading;
+  try {
+    const device = await requestUf2Device();
+    nrfDevice = device as unknown;
+    const name = (device as { productName?: string }).productName ?? 'nRF52840 bootloader';
+    serialStatus.className = 'badge ok';
+    serialStatus.textContent = name;
+    serialInfo.textContent = `[uf2] connected: ${name}`;
+    serialInfo.classList.remove('hidden');
+    termWrite(`[uf2] bootloader selected: ${name}`);
+    summaryEl.classList.remove('error');
+  } catch (e) {
+    const { message } = uf2ErrorToMessage(e);
+    nrfDevice = null;
+    serialStatus.className = 'badge error';
+    serialStatus.textContent = T.nrfNotReady;
+    summaryEl.textContent = message;
+    summaryEl.classList.add('error');
+    termWrite(`! ${message}`);
+  }
+  updateFlashBtnState();
+}
 
 /* ---------------------------------------------------------------- *
  *  FlashConfig wiring
@@ -564,23 +654,32 @@ cfgSize.onchange = () => { flashConfig.size = cfgSize.value; };
  *    upload  + single -> one merged .bin at 0x0
  *    upload  + multi  -> N files at their own offsets
  *    catalog           -> the catalog build for the chosen device
+ *    nRF52840          -> the UF2 file written to the bootloader
  */
 function burnButtonLabel(T: ReturnType<typeof t>): string {
+  if (chipFamily === 'nrf52840') return T.burnNrf;
   if (sourceMode === 'catalog') return T.burnCatalog;
   return uploadMode === 'multi' ? T.burnMulti : T.burnSingle;
 }
 
 function updateFlashBtnState() {
-  // Button enable depends on the current selection:
-  //   upload  — at least one .bin segment + a serial port. In multi mode
-  //             a single file is still valid (one image at its offset),
-  //             so only "no files" disables it.
-  //   catalog — a preselected firmware (from URL or dropdown) + a serial port
-  // In both cases, no port = no flash.
+  // Button enable depends on the chip family and the current selection.
+  //   nrf52840 — a bootloader handle plus one .hex/.uf2 file. The device
+  //               resets itself, so there is no separate port to hold open.
+  //   esp32    — at least one .bin segment + a serial port. In multi mode a
+  //               single file is still valid (one image at its offset), so
+  //               only "no files" disables it.
+  //               catalog — a preselected firmware + a serial port.
+  // In every case, nothing connected means nothing to flash.
   const hasPort = !!serialPort;
-  const ready = sourceMode === 'catalog'
-    ? hasPort && catalogFirmware !== null
-    : hasPort && segments.length > 0;
+  let ready: boolean;
+  if (chipFamily === 'nrf52840') {
+    ready = nrfDevice !== null && segments.length > 0;
+  } else if (sourceMode === 'catalog') {
+    ready = hasPort && catalogFirmware !== null;
+  } else {
+    ready = hasPort && segments.length > 0;
+  }
   flashBtn.disabled = !ready;
   flashBtn.textContent = burnButtonLabel(t());
 }
@@ -591,8 +690,120 @@ function setBurnDisabled(disabled: boolean): void {
 
 flashBtn.addEventListener('click', () => void runFlash());
 
-/** Run the flash flow with whatever source + upload mode is selected. */
+/**
+ * nRF52840 flash: pack the firmware into UF2 and hand it to the bootloader.
+ *
+ * A .hex is converted here in the browser (src/nrf/uf2.ts). A .uf2 the user
+ * already has is used as-is, after a read-back to make sure it is well
+ * formed — a malformed block would otherwise be written blindly.
+ */
+async function runNrfFlash(): Promise<void> {
+  const T = t();
+  if (nrfDevice === null) {
+    summaryEl.textContent = T.nrfNotReady;
+    summaryEl.classList.add('error');
+    return;
+  }
+  if (segments.length === 0) {
+    summaryEl.textContent = T.errNoFirmware;
+    summaryEl.classList.add('error');
+    return;
+  }
+
+  setBurnDisabled(true);
+  abortFlag.aborted = false;
+  abortBtn.classList.remove('hidden');
+  bar.style.width = '0%';
+  summaryEl.classList.remove('error');
+  ensureTerminal();
+
+  const seg = segments[0];
+  const fileName = seg.file?.name ?? seg.name;
+  const lower = fileName.toLowerCase();
+
+  try {
+    let uf2: Uint8Array;
+    if (lower.endsWith('.uf2')) {
+      const bytes = new Uint8Array(await seg.file!.arrayBuffer());
+      try {
+        const info = readUf2(bytes);
+        termWrite(`[uf2] using ${fileName} as-is: ${info.blocks.length} blocks`);
+      } catch (e) {
+        throw new Error(`${fileName} is not a valid UF2 file: ${(e as Error).message}`);
+      }
+      uf2 = bytes;
+    } else {
+      termWrite(`[uf2] converting ${fileName} from Intel HEX…`);
+      const text = await seg.file!.text();
+      uf2 = hexToUf2(text, { familyId: NRF52840_FAMILY_ID });
+      const info = readUf2(uf2);
+      const first = info.blocks[0].targetAddr;
+      const last = info.blocks[info.blocks.length - 1].targetAddr;
+      termWrite(`[uf2] packed ${info.blocks.length} blocks, ` +
+        `flash 0x${first.toString(16)}..0x${last.toString(16)}, ` +
+        `${(uf2.length / 1024 / 1024).toFixed(2)} MB`);
+      summaryEl.textContent = `${T.nrfBlocks}: ${info.blocks.length}`;
+    }
+
+    progressBytes.textContent = `${formatBytes(0)} / ${formatBytes(uf2.length)}`;
+
+    const phaseText: Record<string, string> = {
+      opening: T.progressConnecting,
+      'reading-info': T.progressDetecting,
+      writing: T.progressWriting,
+      verifying: T.progressVerifying,
+      resetting: T.progressRestarting,
+      done: T.progressDone,
+    };
+
+    await flashUf2(
+      nrfDevice as Parameters<typeof flashUf2>[0],
+      { uf2, familyId: NRF52840_FAMILY_ID, fileName: fileName.endsWith('.uf2') ? fileName : 'firmware.uf2' },
+      {
+        onPhase: phase => {
+          const label = phaseText[phase];
+          if (label) logEl.textContent = label;
+        },
+        onProgress: (done, total) => {
+          const pct = total > 0 ? Math.floor((done / total) * 100) : 0;
+          bar.style.width = `${pct}%`;
+          progressBytes.textContent = `${done} / ${total} blocks`;
+        },
+        onLog: line => termWrite(line),
+        onError: (kind, msg) => {
+          const { message } = uf2ErrorToMessage(new Error(msg));
+          void kind;
+          summaryEl.textContent = message;
+          summaryEl.classList.add('error');
+          termWrite(`! ${message}`);
+        },
+      },
+      abortFlag,
+    );
+
+    summaryEl.textContent = T.progressDone;
+    summaryEl.classList.remove('error');
+  } catch (e) {
+    const { message } = uf2ErrorToMessage(e);
+    summaryEl.textContent = message;
+    summaryEl.classList.add('error');
+    termWrite(`! ${message}`);
+  } finally {
+    setBurnDisabled(false);
+    abortBtn.classList.add('hidden');
+    // The bootloader has reset the board, so the handle is spent.
+    nrfDevice = null;
+    serialStatus.className = 'badge idle';
+    serialStatus.textContent = T.nrfNotReady;
+  }
+}
+
+/** Run the flash flow with whatever chip family + source + mode is selected. */
 async function runFlash(): Promise<void> {
+  if (chipFamily === 'nrf52840') {
+    await runNrfFlash();
+    return;
+  }
   const T = t();
   if (!serialPort) {
     summaryEl.textContent = T.errNoPort;
@@ -751,12 +962,90 @@ async function runFlash(): Promise<void> {
 }
 
 abortBtn.addEventListener('click', () => {
+  abortFlag.aborted = true;
   setBurnDisabled(false);
   abortBtn.classList.add('hidden');
   mainEl.classList.remove('is-flashing');
   bar.style.width = '0%';
   logEl.textContent = t().progressCancelled;
   termWrite(`> ${t().progressCancelled}`);
+});
+
+/* ---------------------------------------------------------------- *
+ *  Chip family: ESP32 (esptool.js / Web Serial) vs nRF52840 (UF2 / WebUSB)
+ * ---------------------------------------------------------------- */
+
+/**
+ * Switch the whole page between the two chip families.
+ *
+ * The differences are more than a transport swap:
+ *   - the connect button means different things (open a serial port vs.
+ *     pick a USB bootloader)
+ *   - the firmware extension differs (.bin vs .hex/.uf2), so the file
+ *     input's accept list and the drop-zone copy change
+ *   - the flash parameters block (SPI mode / frequency / size) is an
+ *     esptool.js concept and has no meaning for UF2
+ *   - nRF needs WebUSB, which only Chrome and Edge implement
+ */
+function applyChipFamily(next: ChipFamily): void {
+  chipFamily = next;
+  const T = t();
+
+  chipFamilySel.value = next;
+  // The <option> labels are static markup, so a language switch has to
+  // rewrite them here rather than through the generic data-i18n walk.
+  const optEsp = chipFamilySel.querySelector<HTMLOptionElement>('option[value="esp32"]');
+  const optNrf = chipFamilySel.querySelector<HTMLOptionElement>('option[value="nrf52840"]');
+  if (optEsp) optEsp.textContent = T.chipFamilyEsp32;
+  if (optNrf) optNrf.textContent = T.chipFamilyNrf;
+  if (chipFamilyHint) {
+    chipFamilyHint.textContent =
+      next === 'nrf52840' ? T.chipFamilyHintNrf : T.chipFamilyHintEsp;
+    chipFamilyHint.removeAttribute('data-i18n');
+  }
+
+  // Connect button.
+  if (next === 'nrf52840') {
+    setText('serialConnect', T.nrfBootBtn);
+    serialConnectBtn.classList.remove('primary');
+    serialConnectBtn.classList.add('warn');
+    setText('serialLog', T.nrfBootHint);
+  } else {
+    setText('serialConnect', `${T.step1Btn} `);
+    serialConnectBtn.classList.add('primary');
+    serialConnectBtn.classList.remove('warn');
+    setText('serialLog', T.step1LogChoose);
+  }
+
+  // Firmware file types.
+  fileInput.accept = next === 'nrf52840' ? '.hex,.uf2' : '.bin,application/octet-stream';
+  setText('dropTitle', next === 'nrf52840' ? T.dropTitleHex : T.dropTitle);
+
+  // Flash parameters are esptool.js-only.
+  const configBlock = document.querySelector<HTMLElement>('.config-block');
+  if (configBlock) configBlock.classList.toggle('hidden', next !== 'esp32');
+
+  // Multi-file offsets are an esptool.js concept too: UF2 blocks each carry
+  // their own address, so "several files at hand-set offsets" has no analogue.
+  const uploadTabs = document.getElementById('uploadTabs');
+  if (uploadTabs) uploadTabs.classList.toggle('hidden', next !== 'esp32');
+
+  // A bootloader handle from the other family must not leak across.
+  if (next === 'esp32') nrfDevice = null;
+
+  if (next === 'nrf52840' && !isWebUsbAvailable()) {
+    serialStatus.className = 'badge warn';
+    serialStatus.textContent = 'WebUSB unavailable';
+  } else {
+    serialStatus.className = 'badge idle';
+    serialStatus.textContent = next === 'nrf52840' ? T.nrfNotReady : T.step1StatusDisc;
+  }
+
+  updateFlashBtnState();
+}
+
+chipFamilySel.addEventListener('change', () => {
+  applyChipFamily(chipFamilySel.value as ChipFamily);
 });
 
 /* ---------------------------------------------------------------- *
@@ -784,6 +1073,19 @@ function applyLanguage(next: Lang) {
     if (typeof val === 'string') el.textContent = val;
   });
 
+  // The chip-family hint is not a plain data-i18n string: which text it shows
+  // depends on the selected family, so it is refreshed from applyChipFamily
+  // instead of the generic walk above.
+  if (chipFamilyHint) {
+    chipFamilyHint.textContent =
+      chipFamily === 'nrf52840' ? T.chipFamilyHintNrf : T.chipFamilyHintEsp;
+  }
+
+  // Same for the family <select>: its <option> labels are static markup, and
+  // applyChipFamily also rewrites the connect button, drop-zone copy and the
+  // burn label, all of which are family-dependent.
+  applyChipFamily(chipFamily);
+
   // The drop-zone separator word ("or") is a bare text node with no i18n
   // key of its own; patch it directly.
   setText('dropOr', next === 'zh' ? '或' : 'or');
@@ -804,6 +1106,10 @@ document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach(b => {
 document.documentElement.lang = lang;
 renderSegments();
 initCatalogFlow();
+// Apply the initial chip family so its side effects (file extensions, the
+// config block, the multi-offset tabs) are reflected without needing a
+// change event first.
+applyChipFamily(chipFamily);
 
 /* ---------------------------------------------------------------- *
  *  v0.3 catalog flow

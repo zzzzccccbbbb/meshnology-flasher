@@ -262,6 +262,9 @@ footer {
 .btn span { margin-left: 18px; }
 .btn.primary { background: var(--accent); color: #192019; }
 .btn.primary.full { width: 100%; margin-top: 15px; }
+/* nRF52840 path: amber, matching the source tabs and the file-box border. */
+.btn.warn { background: #e0ac2b; color: #2b2205; }
+.btn.warn.full { width: 100%; margin-top: 15px; }
 .btn.dark { background: #18231f; color: #fff; }
 .btn.ghost { background: #fff; color: var(--text-body); border: 1px solid var(--border); }
 .btn.danger { background: var(--accent-err); color: var(--accent-err-text); }
