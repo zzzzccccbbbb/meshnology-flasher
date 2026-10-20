@@ -29,3 +29,9 @@ dist
 /site-*.png
 /logo-new.png
 /logo-ref-*.png
+# nRF/UF2 real-firmware fixtures (pulled from the W13 PlatformIO build; 1.2 MB
+# each and trivially regenerated, so they stay out of the repo). The tests
+# that use them skip themselves when the files are absent.
+.tmp-w13.hex
+.tmp-w13-ref.uf2
+.tmp-uf2conv.py
