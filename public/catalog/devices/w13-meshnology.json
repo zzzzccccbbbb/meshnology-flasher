@@ -5,6 +5,16 @@
   "chip": "nRF52840",
   "chipFamily": "nrf52840",
   "flashSize": "1MB",
-  "notes": "W13 OLED mesh node. Application only — SoftDevice S140 7.3.0 must already be on the board.",
-  "versions": []
+  "notes": "Application-only image; SoftDevice S140 7.3.0 must already be flashed.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "size": 1292215,
+      "sha256": "46d6284f1414d2f2959136ec0a46bc5bd7f18569dbe179a8cacdbdd260c9b626",
+      "uploaded": "2026-10-21T09:58:00Z",
+      "filename": "1.0.0.hex",
+      "format": "hex",
+      "notes": "MeshCore companion radio, BLE. Build env W13Meshnology_companion_radio_ble. Flash span 0x27000..0x9727c."
+    }
+  ]
 }

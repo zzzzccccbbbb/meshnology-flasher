@@ -16,7 +16,7 @@
       "displayName": "W13 Meshnology (OLED, nRF52840)",
       "vendor": "Meshnology",
       "chip": "nRF52840",
-      "latestVersion": "",
+      "latestVersion": "1.0.0",
       "flashSize": "1MB",
       "notes": "Application-only image; needs SoftDevice S140 7.3.0 already flashed"
     },
