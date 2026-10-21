@@ -6,11 +6,10 @@ import { STRINGS, type Lang } from './i18n';
 import { flashEsp32, type FlashFile, type Phase } from './esp32/flasher';
 import { describeUiConfig } from './esp32/flashConfig';
 import type { ChipCode } from './esp32/chipDetect';
-import { hexToUf2, HexParseError, NRF52840_FAMILY_ID, readUf2 } from './nrf/uf2';
+import { parseIntelHex, toSparseImage, HexParseError } from './nrf/uf2';
 import {
-  flashUf2, isWebUsbAvailable, requestUf2Device, uf2ErrorToMessage,
-  type Uf2DeviceInfo,
-} from './nrf/uf2Transport';
+  flashNrfDfu, isWebSerialAvailable, requestDfuPort, dfuErrorToMessage,
+} from './nrf/dfuTransport';
 import { fetchManifest, fetchDevice, CatalogError } from './catalog/api';
 import { downloadFirmware } from './catalog/reader';
 import type { DeviceDetails, FirmwareVersion } from './catalog/types';
@@ -77,6 +76,16 @@ let nrfDevice: unknown = null;
  * which is why its abort button closes the port instead.
  */
 const abortFlag = { aborted: false };
+
+/**
+ * Protocol-level erase before the nRF write.
+ *
+ * START already erases every page named in the init packet, so a normal
+ * flash is already a fresh page write. Setting this adds explicit ERASE_PAGE
+ * packets first, which is what MeshCore's "Erase flash" option does — useful
+ * when the board has stale app data in pages this image does not cover.
+ */
+let nrfErase = false;
 
 interface Preselected {
   deviceId: string | null;
@@ -206,9 +215,18 @@ app.innerHTML = `
               <button data-mode="single" class="tab active" id="tabSingle" data-i18n="tabSingle">${t().tabSingle}</button>
               <button data-mode="multi" class="tab" id="tabMulti" data-i18n="tabMulti">${t().tabMulti}</button>
             </div>
+            <div id="nrfOptions" class="nrf-options hidden">
+              <label class="check">
+                <input type="checkbox" id="nrfErase" />
+                <span data-i18n="nrfEraseLabel">${t().nrfEraseLabel}</span>
+              </label>
+              <p class="config-hint" data-i18n="nrfEraseHint">${t().nrfEraseHint}</p>
+            </div>
             <div id="drop" class="drop">
               <div class="upload-icon">↑</div>
-              <b id="dropTitle" data-i18n="dropTitle">${t().dropTitle}</b>
+              <!-- No data-i18n here: which text this shows depends on the chip family,
+                   so applyChipFamily owns it. -->
+              <b id="dropTitle">${t().dropTitle}</b>
               <span><span id="dropOr">${lang === 'zh' ? '或' : 'or'}</span> <label for="fileInput" data-i18n="dropBrowse">${t().dropBrowse}</label></span>
               <input id="fileInput" type="file" accept=".bin,application/octet-stream" multiple hidden />
             </div>
@@ -469,7 +487,10 @@ function renderSegments() {
 
 const ALLOWED_EXT = {
     esp32: ['.bin'],
-    nrf52840: ['.hex', '.uf2'],
+    // DFU takes a flat image: Intel HEX carries its own addresses, a raw .bin
+    // is used as-is from address 0. UF2 is deliberately not accepted — that is
+    // a bootloader container, not something the DFU protocol carries.
+    nrf52840: ['.hex', '.bin'],
   } as const;
 
 async function addFiles(files: FileList | File[]) {
@@ -597,36 +618,37 @@ serialConnectBtn.addEventListener('click', async () => {
 });
 
 /**
- * nRF52840: pick the UF2 bootloader over WebUSB.
+ * nRF52840: pick the board's serial port.
  *
- * The bootloader is not a serial port — it is a USB device with a HID
- * interface — so this deliberately does not reuse the Web Serial path. The
- * handle is stored until the next flash; the bootloader resets the board
- * itself once the write lands, so there is nothing to disconnect.
+ * The port is the same USB CDC the board uses for its application (the W13
+ * shows up as 239a:8029). No bootloader button is involved — flashNrfDfu
+ * reboots the chip into DFU itself by opening the port at 1200 baud and
+ * closing it, the standard nRF "touch reset".
  */
 async function doNrfBootConnect() {
   const T = t();
-  if (!isWebUsbAvailable()) {
+  if (!isWebSerialAvailable()) {
     serialStatus.className = 'badge error';
-    serialStatus.textContent = 'WebUSB unavailable';
-    summaryEl.textContent = 'This browser has no WebUSB. Use Chrome or Edge.';
+    serialStatus.textContent = 'Web Serial unavailable';
+    summaryEl.textContent = 'This browser has no Web Serial. Use Chrome or Edge.';
     summaryEl.classList.add('error');
     return;
   }
   serialStatus.className = 'badge busy';
   serialStatus.textContent = T.catalogLoading;
   try {
-    const device = await requestUf2Device();
-    nrfDevice = device as unknown;
-    const name = (device as { productName?: string }).productName ?? 'nRF52840 bootloader';
+    const port = await requestDfuPort();
+    nrfDevice = port;
+    const info = await port.getInfo();
+    const name = vendorName(info.usbVendorId) + (info.productName ? ` · ${info.productName}` : '');
     serialStatus.className = 'badge ok';
     serialStatus.textContent = name;
-    serialInfo.textContent = `[uf2] connected: ${name}`;
+    serialInfo.textContent = `[dfu] port selected: ${name}`;
     serialInfo.classList.remove('hidden');
-    termWrite(`[uf2] bootloader selected: ${name}`);
+    termWrite(`[dfu] serial port selected: ${name}`);
     summaryEl.classList.remove('error');
   } catch (e) {
-    const { message } = uf2ErrorToMessage(e);
+    const { message } = dfuErrorToMessage(e);
     nrfDevice = null;
     serialStatus.className = 'badge error';
     serialStatus.textContent = T.nrfNotReady;
@@ -722,60 +744,56 @@ async function runNrfFlash(): Promise<void> {
   const lower = fileName.toLowerCase();
 
   try {
-    let uf2: Uint8Array;
-    if (lower.endsWith('.uf2')) {
-      const bytes = new Uint8Array(await seg.file!.arrayBuffer());
-      try {
-        const info = readUf2(bytes);
-        termWrite(`[uf2] using ${fileName} as-is: ${info.blocks.length} blocks`);
-      } catch (e) {
-        throw new Error(`${fileName} is not a valid UF2 file: ${(e as Error).message}`);
-      }
-      uf2 = bytes;
+    // DFU wants a flat image and its base address, not a container format.
+    // toSparseImage gives exactly that: holes between HEX records become 0xFF,
+    // and img.start is where the first written byte lands in flash.
+    let image: Uint8Array;
+    let baseAddress: number;
+    if (lower.endsWith('.bin')) {
+      image = new Uint8Array(await seg.file!.arrayBuffer());
+      baseAddress = 0;
+      termWrite(`[dfu] ${fileName}: raw image, ${formatBytes(image.length)}, base 0x0`);
     } else {
-      termWrite(`[uf2] converting ${fileName} from Intel HEX…`);
+      termWrite(`[dfu] parsing ${fileName} as Intel HEX…`);
       const text = await seg.file!.text();
-      uf2 = hexToUf2(text, { familyId: NRF52840_FAMILY_ID });
-      const info = readUf2(uf2);
-      const first = info.blocks[0].targetAddr;
-      const last = info.blocks[info.blocks.length - 1].targetAddr;
-      termWrite(`[uf2] packed ${info.blocks.length} blocks, ` +
-        `flash 0x${first.toString(16)}..0x${last.toString(16)}, ` +
-        `${(uf2.length / 1024 / 1024).toFixed(2)} MB`);
-      summaryEl.textContent = `${T.nrfBlocks}: ${info.blocks.length}`;
+      const sparse = toSparseImage(parseIntelHex(text));
+      image = sparse.bytes;
+      baseAddress = sparse.start;
+      termWrite(`[dfu] image 0x${baseAddress.toString(16)}..0x${sparse.end.toString(16)}, ` +
+        `${formatBytes(image.length)}, ${Math.ceil(image.length / 4096)} flash pages`);
     }
 
-    progressBytes.textContent = `${formatBytes(0)} / ${formatBytes(uf2.length)}`;
+    progressBytes.textContent = `${formatBytes(0)} / ${formatBytes(image.length)}`;
 
     const phaseText: Record<string, string> = {
+      'entering-dfu': T.progressConnecting,
       opening: T.progressConnecting,
-      'reading-info': T.progressDetecting,
+      init: T.progressDetecting,
+      start: T.progressErasing,
+      erasing: T.progressErasing,
       writing: T.progressWriting,
-      verifying: T.progressVerifying,
-      resetting: T.progressRestarting,
+      finishing: T.progressVerifying,
       done: T.progressDone,
     };
 
-    await flashUf2(
-      nrfDevice as Parameters<typeof flashUf2>[0],
-      { uf2, familyId: NRF52840_FAMILY_ID, fileName: fileName.endsWith('.uf2') ? fileName : 'firmware.uf2' },
+    await flashNrfDfu(
+      nrfDevice as SerialPort,
+      { image, startAddress: baseAddress, erase: nrfErase },
       {
         onPhase: phase => {
           const label = phaseText[phase];
           if (label) logEl.textContent = label;
         },
-        onProgress: (done, total) => {
-          const pct = total > 0 ? Math.floor((done / total) * 100) : 0;
+        onProgress: (sent, total) => {
+          const pct = total > 0 ? Math.floor((sent / total) * 100) : 0;
           bar.style.width = `${pct}%`;
-          progressBytes.textContent = `${done} / ${total} blocks`;
+          progressBytes.textContent = `${formatBytes(sent)} / ${formatBytes(total)}`;
         },
         onLog: line => termWrite(line),
-        onError: (kind, msg) => {
-          const { message } = uf2ErrorToMessage(new Error(msg));
-          void kind;
-          summaryEl.textContent = message;
+        onError: (_kind, msg) => {
+          summaryEl.textContent = msg;
           summaryEl.classList.add('error');
-          termWrite(`! ${message}`);
+          termWrite(`! ${msg}`);
         },
       },
       abortFlag,
@@ -784,14 +802,14 @@ async function runNrfFlash(): Promise<void> {
     summaryEl.textContent = T.progressDone;
     summaryEl.classList.remove('error');
   } catch (e) {
-    const { message } = uf2ErrorToMessage(e);
+    const { message } = dfuErrorToMessage(e);
     summaryEl.textContent = message;
     summaryEl.classList.add('error');
     termWrite(`! ${message}`);
   } finally {
     setBurnDisabled(false);
     abortBtn.classList.add('hidden');
-    // The bootloader has reset the board, so the handle is spent.
+    // The bootloader rebooted the board, so the port handle is spent.
     nrfDevice = null;
     serialStatus.className = 'badge idle';
     serialStatus.textContent = T.nrfNotReady;
@@ -1018,7 +1036,7 @@ function applyChipFamily(next: ChipFamily): void {
   }
 
   // Firmware file types.
-  fileInput.accept = next === 'nrf52840' ? '.hex,.uf2' : '.bin,application/octet-stream';
+  fileInput.accept = next === 'nrf52840' ? '.hex,.bin' : '.bin,application/octet-stream';
   setText('dropTitle', next === 'nrf52840' ? T.dropTitleHex : T.dropTitle);
 
   // Flash parameters are esptool.js-only.
@@ -1030,12 +1048,17 @@ function applyChipFamily(next: ChipFamily): void {
   const uploadTabs = document.getElementById('uploadTabs');
   if (uploadTabs) uploadTabs.classList.toggle('hidden', next !== 'esp32');
 
+  // The nRF-only options: explicit erase before writing. START erases the
+  // pages the init packet names either way; this is the extra full-range wipe.
+  const nrfOptions = document.getElementById('nrfOptions');
+  if (nrfOptions) nrfOptions.classList.toggle('hidden', next !== 'nrf52840');
+
   // A bootloader handle from the other family must not leak across.
   if (next === 'esp32') nrfDevice = null;
 
-  if (next === 'nrf52840' && !isWebUsbAvailable()) {
+  if (next === 'nrf52840' && !isWebSerialAvailable()) {
     serialStatus.className = 'badge warn';
-    serialStatus.textContent = 'WebUSB unavailable';
+    serialStatus.textContent = 'Web Serial unavailable';
   } else {
     serialStatus.className = 'badge idle';
     serialStatus.textContent = next === 'nrf52840' ? T.nrfNotReady : T.step1StatusDisc;
@@ -1046,6 +1069,11 @@ function applyChipFamily(next: ChipFamily): void {
 
 chipFamilySel.addEventListener('change', () => {
   applyChipFamily(chipFamilySel.value as ChipFamily);
+});
+
+$<HTMLInputElement>('#nrfErase').addEventListener('change', e => {
+  nrfErase = (e.target as HTMLInputElement).checked;
+  if (nrfErase) termWrite('[dfu] erase-before-write enabled');
 });
 
 /* ---------------------------------------------------------------- *
@@ -1092,8 +1120,9 @@ function applyLanguage(next: Lang) {
 
   // Live regions that hold runtime state are refreshed by their own
   // update paths; only the static fallbacks need a nudge here.
+  // dropTitle is deliberately absent: applyChipFamily above already set it
+  // to the copy that matches the selected family.
   setText('serialStatus', T.step1StatusDisc);
-  setText('dropTitle', T.dropTitle);
   setText('chipValue', T.chipUnknown);
   setText('chipValue2', T.chipUnknown);
   renderSegments();

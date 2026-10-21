@@ -355,6 +355,28 @@ footer {
   color: #8a6d05;
   border-bottom-color: #e0ac2b;
 }
+/* ============== nRF-only options ============== */
+
+.nrf-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-body);
+  cursor: pointer;
+}
+.check input {
+  width: 15px;
+  height: 15px;
+  accent-color: #e0ac2b;
+  cursor: pointer;
+}
+
 .drop {
   border: 1.5px dashed #c8d4ca;
   border-radius: 12px;
