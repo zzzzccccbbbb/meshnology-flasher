@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-10-16T09:00:00Z",
+  "updated": "2026-10-21T10:00:00Z",
   "devices": [
     {
       "id": "w10-meshnology",
@@ -10,6 +10,24 @@
       "latestVersion": "1.0.0",
       "flashSize": "16MB",
       "notes": "Factory firmware for the W10 board with PSRAM 8MB"
+    },
+    {
+      "id": "w13-meshnology",
+      "displayName": "W13 Meshnology (OLED, nRF52840)",
+      "vendor": "Meshnology",
+      "chip": "nRF52840",
+      "latestVersion": "",
+      "flashSize": "1MB",
+      "notes": "Application-only image; needs SoftDevice S140 7.3.0 already flashed"
+    },
+    {
+      "id": "w13-meshnology-eink",
+      "displayName": "W13 Meshnology (E-Ink, nRF52840)",
+      "vendor": "Meshnology",
+      "chip": "nRF52840",
+      "latestVersion": "1.0.0",
+      "flashSize": "1MB",
+      "notes": "Application-only image; needs SoftDevice S140 7.3.0 already flashed"
     }
   ]
 }

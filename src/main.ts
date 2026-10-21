@@ -12,6 +12,9 @@ import {
 } from './nrf/dfuTransport';
 import { fetchManifest, fetchDevice, CatalogError } from './catalog/api';
 import { downloadFirmware } from './catalog/reader';
+import {
+  hexToNrfImage, describeNrfImage, fetchNrfFirmware, type NrfImage,
+} from './catalog/nrfReader';
 import type { DeviceDetails, FirmwareVersion } from './catalog/types';
 
 /* ---------------------------------------------------------------- *
@@ -95,7 +98,17 @@ const urlParams: Preselected = parseUrlParams();
 
 /** In catalog mode, the bytes are fetched from R2 (well, Pages static)
  *  just before Start flashing, then verified by SHA-256. */
-let catalogFirmware: { deviceId: string; version: FirmwareVersion } | null = null;
+/**
+ * The preselected catalog firmware. The device record is kept alongside the
+ * version because it carries `chipFamily` and `displayName` — the UI needs
+ * both to route the write down the right transport and to label the progress
+ * line.
+ */
+let catalogFirmware: {
+  deviceId: string;
+  device: DeviceDetails | null;
+  version: FirmwareVersion;
+} | null = null;
 
 function parseUrlParams(): Preselected {
   const sp = new URLSearchParams(window.location.search);
@@ -696,7 +709,12 @@ function updateFlashBtnState() {
   const hasPort = !!serialPort;
   let ready: boolean;
   if (chipFamily === 'nrf52840') {
-    ready = nrfDevice !== null && segments.length > 0;
+    // In catalog mode the firmware is still to be fetched, so the preselection
+    // is what counts; in upload mode a dropped file is what counts. Either way
+    // a serial port is required — the DFU path never opens one by itself.
+    ready = hasPort && (sourceMode === 'catalog'
+      ? catalogFirmware !== null
+      : segments.length > 0);
   } else if (sourceMode === 'catalog') {
     ready = hasPort && catalogFirmware !== null;
   } else {
@@ -713,11 +731,54 @@ function setBurnDisabled(disabled: boolean): void {
 flashBtn.addEventListener('click', () => void runFlash());
 
 /**
- * nRF52840 flash: pack the firmware into UF2 and hand it to the bootloader.
+ * Where the nRF image comes from: a file the user dropped, or a catalog
+ * firmware that still has to be fetched. Both end up as the same flat image.
+ */
+type NrfSource =
+  | { kind: 'file'; file: File; name: string }
+  | { kind: 'catalog'; deviceId: string; version: FirmwareVersion };
+
+/** The firmware the nRF path should write, if any. */
+function nrfSource(): NrfSource | null {
+  if (sourceMode === 'catalog') {
+    if (!catalogFirmware) return null;
+    return {
+      kind: 'catalog',
+      deviceId: catalogFirmware.deviceId,
+      version: catalogFirmware.version,
+    };
+  }
+  const seg = segments[0];
+  if (!seg?.file) return null;
+  return { kind: 'file', file: seg.file, name: seg.name };
+}
+
+/** Decode an nRF source into a flat image plus its base address. */
+async function loadNrfImage(src: NrfSource): Promise<NrfImage> {
+  if (src.kind === 'catalog') {
+    return fetchNrfFirmware(src.deviceId, src.version, termWrite);
+  }
+
+  const lower = src.name.toLowerCase();
+  if (lower.endsWith('.bin')) {
+    const bytes = new Uint8Array(await src.file.arrayBuffer());
+    return {
+      bytes,
+      startAddress: 0,
+      endAddress: bytes.byteLength,
+      pages: Math.ceil(bytes.byteLength / 4096),
+    };
+  }
+  return hexToNrfImage(await src.file.text());
+}
+
+/**
+ * nRF52840 flash over Nordic's serial DFU protocol.
  *
- * A .hex is converted here in the browser (src/nrf/uf2.ts). A .uf2 the user
- * already has is used as-is, after a read-back to make sure it is well
- * formed — a malformed block would otherwise be written blindly.
+ * The image comes from either a dropped file or the catalog; both are decoded
+ * to a flat image with a base address, which is what the DFU init packet is
+ * built from at flash time. The board reboots into its bootloader by itself
+ * (the 1200-baud touch reset inside flashNrfDfu), so no button is involved.
  */
 async function runNrfFlash(): Promise<void> {
   const T = t();
@@ -726,7 +787,8 @@ async function runNrfFlash(): Promise<void> {
     summaryEl.classList.add('error');
     return;
   }
-  if (segments.length === 0) {
+  const src = nrfSource();
+  if (src === null) {
     summaryEl.textContent = T.errNoFirmware;
     summaryEl.classList.add('error');
     return;
@@ -739,31 +801,16 @@ async function runNrfFlash(): Promise<void> {
   summaryEl.classList.remove('error');
   ensureTerminal();
 
-  const seg = segments[0];
-  const fileName = seg.file?.name ?? seg.name;
-  const lower = fileName.toLowerCase();
+  const label = src.kind === 'catalog' ? src.version.filename : src.name;
 
   try {
     // DFU wants a flat image and its base address, not a container format.
-    // toSparseImage gives exactly that: holes between HEX records become 0xFF,
-    // and img.start is where the first written byte lands in flash.
-    let image: Uint8Array;
-    let baseAddress: number;
-    if (lower.endsWith('.bin')) {
-      image = new Uint8Array(await seg.file!.arrayBuffer());
-      baseAddress = 0;
-      termWrite(`[dfu] ${fileName}: raw image, ${formatBytes(image.length)}, base 0x0`);
-    } else {
-      termWrite(`[dfu] parsing ${fileName} as Intel HEX…`);
-      const text = await seg.file!.text();
-      const sparse = toSparseImage(parseIntelHex(text));
-      image = sparse.bytes;
-      baseAddress = sparse.start;
-      termWrite(`[dfu] image 0x${baseAddress.toString(16)}..0x${sparse.end.toString(16)}, ` +
-        `${formatBytes(image.length)}, ${Math.ceil(image.length / 4096)} flash pages`);
-    }
+    // loadNrfImage produces exactly that from either source, filling linker
+    // holes between HEX records with 0xFF.
+    const img = await loadNrfImage(src);
+    termWrite(`[dfu] ${label}: ${describeNrfImage(img)}`);
 
-    progressBytes.textContent = `${formatBytes(0)} / ${formatBytes(image.length)}`;
+    progressBytes.textContent = `${formatBytes(0)} / ${formatBytes(img.bytes.byteLength)}`;
 
     const phaseText: Record<string, string> = {
       'entering-dfu': T.progressConnecting,
@@ -778,11 +825,11 @@ async function runNrfFlash(): Promise<void> {
 
     await flashNrfDfu(
       nrfDevice as SerialPort,
-      { image, startAddress: baseAddress, erase: nrfErase },
+      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase },
       {
         onPhase: phase => {
-          const label = phaseText[phase];
-          if (label) logEl.textContent = label;
+          const phaseName = phaseText[phase];
+          if (phaseName) logEl.textContent = phaseName;
         },
         onProgress: (sent, total) => {
           const pct = total > 0 ? Math.floor((sent / total) * 100) : 0;
@@ -1250,7 +1297,11 @@ function populateDeviceDropdown(manifest: { devices: Array<{ id: string; display
   for (const d of manifest.devices) {
     const opt = document.createElement('option');
     opt.value = d.id;
-    opt.textContent = `${d.displayName} (latest ${d.latestVersion})`;
+    // A device whose firmware has not been published yet carries an empty
+    // latestVersion; showing "(latest )" reads like a bug.
+    opt.textContent = d.latestVersion
+      ? `${d.displayName} (latest ${d.latestVersion})`
+      : d.displayName;
     sel.appendChild(opt);
   }
   sel.disabled = false;
@@ -1315,7 +1366,17 @@ function populateVersionDropdown(device: DeviceDetails) {
 }
 
 async function selectCatalogFirmware(device: DeviceDetails, version: FirmwareVersion) {
-  catalogFirmware = { deviceId: device.id, version };
+  // A catalog entry knows which chip family it needs, so picking a device is
+  // enough to route the whole page — the user should not have to also flip
+  // the chip selector. Without this, choosing an nRF board while ESP32 mode is
+  // active would download a .hex and hand it to esptool.js.
+  const wantFamily: ChipFamily = device.chipFamily ?? 'esp32';
+  if (wantFamily !== chipFamily) {
+    applyChipFamily(wantFamily);
+    termWrite(`[catalog] ${device.displayName} needs the ${wantFamily} path; switched automatically`);
+  }
+
+  catalogFirmware = { deviceId: device.id, device, version };
   const T = t();
   const sizeMB = T.formatMb(version.size);
   summaryEl.textContent = T.catalogSelected(device.displayName, version.version, sizeMB);

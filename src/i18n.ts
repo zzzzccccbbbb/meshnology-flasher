@@ -64,8 +64,8 @@ export const STRINGS = {
     catalogBackToPicker: '← back to device list',
     catalogPickAnother: 'Pick another version',
     catalogBack: '← switch mode',
-    catalogSelected: (deviceName: string, version: string, sizeMB: string) =>
-      `${deviceName} · ${version} · ${sizeMB} MB`,
+    catalogSelected: (deviceName: string, version: string, size: string) =>
+          `${deviceName} · ${version} · ${size}`,
     configTitle: 'Flash parameters',
     configMode: 'Mode',
     configFreq: 'Frequency',
@@ -199,8 +199,8 @@ export const STRINGS = {
     catalogBackToPicker: '← 返回设备列表',
     catalogPickAnother: '选择其他版本',
     catalogBack: '← 切换模式',
-    catalogSelected: (deviceName: string, version: string, sizeMB: string) =>
-      `${deviceName} · ${version} · ${sizeMB} MB`,
+    catalogSelected: (deviceName: string, version: string, size: string) =>
+          `${deviceName} · ${version} · ${size}`,
     configTitle: 'Flash 参数',
     configMode: '模式',
     configFreq: '频率',

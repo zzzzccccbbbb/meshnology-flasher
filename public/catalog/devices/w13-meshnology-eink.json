@@ -1,0 +1,20 @@
+{
+  "id": "w13-meshnology-eink",
+  "displayName": "W13 Meshnology (E-Ink, nRF52840)",
+  "vendor": "Meshnology",
+  "chip": "nRF52840",
+  "chipFamily": "nrf52840",
+  "flashSize": "1MB",
+  "notes": "W13 e-ink mesh node. Application only — SoftDevice S140 7.3.0 must already be on the board.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "size": 1340230,
+      "sha256": "077a44a6afe8580210eefc2e8913c6f211ee8e8624368c2b40ceac2d5f61aa08",
+      "uploaded": "2026-10-21T09:50:00Z",
+      "filename": "1.0.0.hex",
+      "format": "hex",
+      "notes": "MeshCore E-Ink companion radio, BLE. Build env W13MeshnologyEink_companion_radio_ble."
+    }
+  ]
+}

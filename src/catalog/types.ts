@@ -21,12 +21,22 @@ export interface CatalogManifest {
   devices: DeviceSummary[];
 }
 
+/**
+ * How a catalog firmware is delivered.
+ *
+ *   bin  — a merged image, written at its flash offset (ESP32)
+ *   hex  — Intel HEX carrying its own addresses, unpacked in the browser
+ *          and written over Nordic DFU (nRF52840)
+ */
+export type FirmwareFormat = 'bin' | 'hex';
+
 export interface FirmwareVersion {
   version: string;
-  size: number;          // bytes
+  size: number;          // bytes on the wire as published
   sha256: string;        // 64-char lowercase hex
   uploaded: string;      // ISO 8601
   filename: string;      // basename only, used for UI display
+  format?: FirmwareFormat; // defaults to 'bin' when absent
   notes?: string;
 }
 
@@ -37,6 +47,13 @@ export interface DeviceDetails {
   chip: string;
   flashSize: string;
   notes?: string;
+  /**
+   * Which chip-family pipeline this device needs. Absent means 'esp32'.
+   * The UI switches its whole flashing path when this is 'nrf52840', so a
+   * catalog entry is enough to route the user to the right transport — no
+   * manual chip selection needed.
+   */
+  chipFamily?: 'esp32' | 'nrf52840';
   versions: FirmwareVersion[];
 }
 
