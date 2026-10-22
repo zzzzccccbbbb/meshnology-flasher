@@ -69,7 +69,19 @@ export async function fetchDevice(id: string): Promise<DeviceDetails> {
   return data;
 }
 
-/** Resolve a (device, version) pair to a download URL. */
-export function firmwareUrl(id: string, version: string): string {
-  return `/firmware/${encodeURIComponent(id)}/${encodeURIComponent(version)}.bin`;
+/**
+ * Resolve a (device, version) pair to its download URL.
+ *
+ * The extension is the catalog entry's own filename, not a fixed ".bin": a
+ * device may publish a merged ESP32 image, an Intel HEX, or a DFU package,
+ * and the file on disk carries that extension. Hardcoding ".bin" made the
+ * browser request a path that does not exist, and the SPA fallback answered
+ * with index.html — which surfaced as "downloaded 612 bytes" rather than a
+ * 404, because the fallback returns 200.
+ */
+export function firmwareUrl(id: string, version: string, filename?: string): string {
+  const ext = filename && filename.includes('.')
+    ? filename.slice(filename.lastIndexOf('.'))
+    : '.bin';
+  return `/firmware/${encodeURIComponent(id)}/${encodeURIComponent(version)}${ext}`;
 }

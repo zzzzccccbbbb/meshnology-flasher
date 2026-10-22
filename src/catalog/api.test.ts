@@ -90,8 +90,27 @@ describe('fetchDevice', () => {
 });
 
 describe('firmwareUrl', () => {
-  it('builds the expected path', () => {
+  it('defaults to .bin when the catalog gives no filename', () => {
     expect(firmwareUrl('w10-meshnology', '1.0.0')).toBe('/firmware/w10-meshnology/1.0.0.bin');
+  });
+
+  it('takes the extension from the catalog filename', () => {
+    expect(firmwareUrl('w13-meshnology', '1.0.0', '1.0.0.dfu'))
+      .toBe('/firmware/w13-meshnology/1.0.0.dfu');
+    expect(firmwareUrl('w13-meshnology-eink', '1.0.0', '1.0.0.hex'))
+      .toBe('/firmware/w13-meshnology-eink/1.0.0.hex');
+  });
+
+  it('keeps the version in the path and only borrows the extension', () => {
+    // The filename's stem is ignored: the version is authoritative, because
+    // that is what the directory layout is keyed on.
+    expect(firmwareUrl('w13', '2.1.0', 'old-name.dfu'))
+      .toBe('/firmware/w13/2.1.0.dfu');
+  });
+
+  it('falls back to .bin for a filename with no extension', () => {
+    expect(firmwareUrl('w10', '1.0.0', 'noextension'))
+      .toBe('/firmware/w10/1.0.0.bin');
   });
 
   it('percent-encodes device id and version', () => {

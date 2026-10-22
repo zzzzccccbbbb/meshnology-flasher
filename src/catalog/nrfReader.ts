@@ -97,7 +97,7 @@ export async function fetchNrfFirmware(
     throw new Error(`bad sha256 in catalog: ${version.sha256}`);
   }
 
-  const url = firmwareUrl(deviceId, version.version);
+  const url = firmwareUrl(deviceId, version.version, version.filename);
   onLog(`[catalog] fetching ${deviceId} ${version.version}…`);
   const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) {
@@ -106,8 +106,17 @@ export async function fetchNrfFirmware(
 
   const bytes = new Uint8Array(await res.arrayBuffer());
   if (bytes.byteLength !== version.size) {
+    // A SPA fallback answers 200 with index.html for any unknown path, so a
+    // size mismatch is the only signal that the file is not where the catalog
+    // says it is. Say so, because "stale CDN copy" sends people looking at
+    // caching when the URL was simply wrong.
+    const looksLikeHtml = bytes.byteLength > 0 && bytes[0] === 0x3c; // '<'
     throw new Error(
-      `downloaded ${bytes.byteLength} bytes, catalog says ${version.size} — stale CDN copy?`,
+      looksLikeHtml
+        ? `${url} returned HTML (${bytes.byteLength} bytes), not the firmware — ` +
+          `the file is not deployed at that path`
+        : `downloaded ${bytes.byteLength} bytes, catalog says ${version.size} — ` +
+          `stale CDN copy?`,
     );
   }
 

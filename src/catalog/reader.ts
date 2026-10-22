@@ -25,7 +25,7 @@ export async function downloadFirmware(
     throw new CatalogError('CATALOG_INVALID', `Bad sha256 in catalog: ${version.sha256}`);
   }
 
-  const url = firmwareUrl(deviceId, version.version);
+  const url = firmwareUrl(deviceId, version.version, version.filename);
   const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) {
     throw new CatalogError(
@@ -37,9 +37,15 @@ export async function downloadFirmware(
   const bytes = new Uint8Array(buf);
 
   if (bytes.byteLength !== version.size) {
+    // A SPA fallback answers 200 with index.html for any unknown path, so a
+    // size mismatch is the only signal that the file is not deployed where
+    // the catalog says it is.
+    const looksLikeHtml = bytes.byteLength > 0 && bytes[0] === 0x3c; // '<'
     throw new CatalogError(
-      'BIN_SIZE_MISMATCH',
-      `Downloaded ${bytes.byteLength} bytes, expected ${version.size} per catalog. CDN may be serving a stale or truncated file.`,
+      looksLikeHtml ? 'FIRMWARE_MISSING' : 'BIN_SIZE_MISMATCH',
+      looksLikeHtml
+        ? `${url} returned HTML (${bytes.byteLength} bytes), not the firmware — the file is not deployed at that path`
+        : `Downloaded ${bytes.byteLength} bytes, expected ${version.size} per catalog. CDN may be serving a stale or truncated file.`,
     );
   }
 
