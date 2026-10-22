@@ -27,8 +27,13 @@ export interface CatalogManifest {
  *   bin  — a merged image, written at its flash offset (ESP32)
  *   hex  — Intel HEX carrying its own addresses, unpacked in the browser
  *          and written over Nordic DFU (nRF52840)
+ *   dfu  — an Adafruit/Nordic DFU package (.dfu or .zip): a ZIP holding
+ *          manifest.json, firmware.bin and firmware.dat. Same wire result
+ *          as the hex it is built from, but it is the format
+ *          adafruit-nrfutil and the nRF DFU apps accept, so publishing it
+ *          lets one file serve the browser and the desktop tools.
  */
-export type FirmwareFormat = 'bin' | 'hex';
+export type FirmwareFormat = 'bin' | 'hex' | 'dfu';
 
 export interface FirmwareVersion {
   version: string;

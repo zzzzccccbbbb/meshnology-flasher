@@ -16,6 +16,7 @@
  */
 
 import { parseIntelHex, toSparseImage, HexParseError } from '../nrf/uf2';
+import { parseDfuPackage, describeDfuPackage } from '../nrf/dfuPackage';
 import { firmwareUrl, type CatalogError } from './api';
 import { isValidSha256, type FirmwareVersion } from './types';
 
@@ -71,9 +72,12 @@ export function describeNrfImage(img: NrfImage): string {
 }
 
 /** The delivery format of a catalog entry, inferred from the extension. */
-export function versionFormat(version: FirmwareVersion): 'hex' | 'bin' {
+export function versionFormat(version: FirmwareVersion): 'hex' | 'bin' | 'dfu' {
   if (version.format) return version.format;
-  return version.filename.toLowerCase().endsWith('.hex') ? 'hex' : 'bin';
+  const name = version.filename.toLowerCase();
+  if (name.endsWith('.hex')) return 'hex';
+  if (name.endsWith('.dfu') || name.endsWith('.zip')) return 'dfu';
+  return 'bin';
 }
 
 /**
@@ -113,12 +117,31 @@ export async function fetchNrfFirmware(
   }
   onLog(`[catalog] sha-256 verified for ${version.filename}`);
 
-  if (versionFormat(version) === 'bin') {
+  const fmt = versionFormat(version);
+  if (fmt === 'bin') {
     return {
       bytes,
       startAddress: 0,
       endAddress: bytes.byteLength,
       pages: Math.ceil(bytes.byteLength / 4096),
+    };
+  }
+  if (fmt === 'dfu') {
+    // A DFU package carries the image at whatever base its linker used; the
+    // W13 boards put the application at 0x27000. The package's own manifest
+    // does not record that address, so it comes from the device entry.
+    const pkg = parseDfuPackage(bytes);
+    const base = 0x27000;
+    onLog(`[dfu] ${describeDfuPackage(pkg, base)}`);
+    if (pkg.softdeviceReqLabel) {
+      onLog(`[dfu] the board must already carry SoftDevice ${pkg.softdeviceReqLabel}; ` +
+        'the bootloader refuses the write otherwise');
+    }
+    return {
+      bytes: pkg.image,
+      startAddress: base,
+      endAddress: base + pkg.image.byteLength,
+      pages: Math.ceil(pkg.image.byteLength / 4096),
     };
   }
   return hexToNrfImage(new TextDecoder().decode(bytes));

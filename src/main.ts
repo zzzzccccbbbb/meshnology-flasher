@@ -15,6 +15,7 @@ import { downloadFirmware } from './catalog/reader';
 import {
   hexToNrfImage, describeNrfImage, fetchNrfFirmware, type NrfImage,
 } from './catalog/nrfReader';
+import { parseDfuPackage, describeDfuPackage } from './nrf/dfuPackage';
 import type { DeviceDetails, FirmwareVersion } from './catalog/types';
 
 /* ---------------------------------------------------------------- *
@@ -500,10 +501,11 @@ function renderSegments() {
 
 const ALLOWED_EXT = {
     esp32: ['.bin'],
-    // DFU takes a flat image: Intel HEX carries its own addresses, a raw .bin
-    // is used as-is from address 0. UF2 is deliberately not accepted — that is
-    // a bootloader container, not something the DFU protocol carries.
-    nrf52840: ['.hex', '.bin'],
+    // DFU takes a flat image or a package: Intel HEX and raw .bin carry their
+    // own content, and a .dfu/.zip is an Adafruit/Nordic DFU package that we
+    // unpack in the browser. UF2 is deliberately absent — it is a bootloader
+    // container for mass-storage flashing, not something serial DFU carries.
+    nrf52840: ['.hex', '.bin', '.dfu', '.zip'],
   } as const;
 
 async function addFiles(files: FileList | File[]) {
@@ -649,6 +651,7 @@ async function doNrfBootConnect() {
   }
   serialStatus.className = 'badge busy';
   serialStatus.textContent = T.catalogLoading;
+  termWrite('[dfu] requesting serial port…');
   try {
     const port = await requestDfuPort();
     nrfDevice = port;
@@ -668,6 +671,7 @@ async function doNrfBootConnect() {
     summaryEl.textContent = message;
     summaryEl.classList.add('error');
     termWrite(`! ${message}`);
+    termWrite(`! raw: ${(e as Error)?.stack ?? String(e)}`);
   }
   updateFlashBtnState();
 }
@@ -698,27 +702,18 @@ function burnButtonLabel(T: ReturnType<typeof t>): string {
 }
 
 function updateFlashBtnState() {
-  // Button enable depends on the chip family and the current selection.
-  //   nrf52840 — a bootloader handle plus one .hex/.uf2 file. The device
-  //               resets itself, so there is no separate port to hold open.
-  //   esp32    — at least one .bin segment + a serial port. In multi mode a
-  //               single file is still valid (one image at its offset), so
-  //               only "no files" disables it.
-  //               catalog — a preselected firmware + a serial port.
-  // In every case, nothing connected means nothing to flash.
-  const hasPort = !!serialPort;
+  // What counts as "connected" depends on the family: the ESP32 path holds a
+  // Web Serial port open in `serialPort`, while the nRF path holds its port in
+  // `nrfDevice` and never assigns serialPort — they are separate transports,
+  // not two names for the same thing.
+  const connected = chipFamily === 'nrf52840' ? nrfDevice !== null : serialPort !== null;
+
   let ready: boolean;
-  if (chipFamily === 'nrf52840') {
-    // In catalog mode the firmware is still to be fetched, so the preselection
-    // is what counts; in upload mode a dropped file is what counts. Either way
-    // a serial port is required — the DFU path never opens one by itself.
-    ready = hasPort && (sourceMode === 'catalog'
-      ? catalogFirmware !== null
-      : segments.length > 0);
-  } else if (sourceMode === 'catalog') {
-    ready = hasPort && catalogFirmware !== null;
+  if (sourceMode === 'catalog') {
+    // A preselected catalog firmware stands in for an uploaded file.
+    ready = connected && catalogFirmware !== null;
   } else {
-    ready = hasPort && segments.length > 0;
+    ready = connected && segments.length > 0;
   }
   flashBtn.disabled = !ready;
   flashBtn.textContent = burnButtonLabel(t());
@@ -767,6 +762,20 @@ async function loadNrfImage(src: NrfSource): Promise<NrfImage> {
       startAddress: 0,
       endAddress: bytes.byteLength,
       pages: Math.ceil(bytes.byteLength / 4096),
+    };
+  }
+  if (lower.endsWith('.dfu') || lower.endsWith('.zip')) {
+    const pkg = parseDfuPackage(new Uint8Array(await src.file.arrayBuffer()));
+    const base = 0x27000;
+    termWrite(`[dfu] ${describeDfuPackage(pkg, base)}`);
+    if (pkg.softdeviceReqLabel) {
+      termWrite(`[dfu] the board must already carry SoftDevice ${pkg.softdeviceReqLabel}`);
+    }
+    return {
+      bytes: pkg.image,
+      startAddress: base,
+      endAddress: base + pkg.image.byteLength,
+      pages: Math.ceil(pkg.image.byteLength / 4096),
     };
   }
   return hexToNrfImage(await src.file.text());
@@ -1083,8 +1092,8 @@ function applyChipFamily(next: ChipFamily): void {
   }
 
   // Firmware file types.
-  fileInput.accept = next === 'nrf52840' ? '.hex,.bin' : '.bin,application/octet-stream';
-  setText('dropTitle', next === 'nrf52840' ? T.dropTitleHex : T.dropTitle);
+  fileInput.accept = next === 'nrf52840' ? '.hex,.bin,.dfu,.zip' : '.bin,application/octet-stream';
+  setText('dropTitle', next === 'nrf52840' ? T.dropTitleNrf : T.dropTitle);
 
   // Flash parameters are esptool.js-only.
   const configBlock = document.querySelector<HTMLElement>('.config-block');

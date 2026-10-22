@@ -35,3 +35,4 @@ dist
 .tmp-w13.hex
 .tmp-w13-ref.uf2
 .tmp-uf2conv.py
+.tmp-w13.dfu
