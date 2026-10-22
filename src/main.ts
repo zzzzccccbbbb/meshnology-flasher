@@ -1062,6 +1062,7 @@ abortBtn.addEventListener('click', () => {
  *   - nRF needs WebUSB, which only Chrome and Edge implement
  */
 function applyChipFamily(next: ChipFamily): void {
+  const previous = chipFamily;
   chipFamily = next;
   const T = t();
 
@@ -1109,8 +1110,21 @@ function applyChipFamily(next: ChipFamily): void {
   const nrfOptions = document.getElementById('nrfOptions');
   if (nrfOptions) nrfOptions.classList.toggle('hidden', next !== 'nrf52840');
 
-  // A bootloader handle from the other family must not leak across.
-  if (next === 'esp32') nrfDevice = null;
+  // A handle from the other family is meaningless here — the ESP32 path
+  // talks esptool.js over `serialPort`, the nRF path drives Nordic DFU over
+  // `nrfDevice`, and neither can use the other's port. Drop the stale one so
+  // the burn button reflects what is actually connected instead of latching
+  // onto a handle the new path will never touch.
+  if (previous !== next) {
+    if (next === 'esp32' && nrfDevice !== null) {
+      nrfDevice = null;
+      termWrite('[ui] closed the nRF port handle: chip family changed to ESP32');
+    }
+    if (next === 'nrf52840' && serialPort !== null) {
+      void doSerialDisconnect();
+      termWrite('[ui] closed the serial port: chip family changed to nRF52840');
+    }
+  }
 
   if (next === 'nrf52840' && !isWebSerialAvailable()) {
     serialStatus.className = 'badge warn';
