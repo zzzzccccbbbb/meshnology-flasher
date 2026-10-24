@@ -27,6 +27,7 @@ import {
   TOUCH_RESET_WAIT_TIME,
   DTR_LOW_MS,
   DTR_RESET_WAIT_MS,
+  RE_ENUMERATE_WAIT_MS,
   FLASH_PAGE_ERASE_TIME,
   FLASH_PAGE_WRITE_TIME,
   type DfuPackets,
@@ -298,24 +299,6 @@ export class DfuLink {
   }
 
   /**
-   * Whether the port still looks usable.
-   *
-   * When a board reboots, the browser marks the stream as errored or
-   * closed. That is the signal that the handle we hold points at a USB
-   * instance that no longer exists.
-   */
-  isAlive(): boolean {
-    const p = this.port as unknown as {
-      readable?: ReadableStream<Uint8Array> | null;
-      writable?: WritableStream<Uint8Array> | null;
-    };
-    if (!p.readable && !p.writable) return false;
-    // A locked stream is normal — we hold the reader and writer. What
-    // matters is that the streams were not replaced by errors.
-    return p.readable !== null && p.readable !== undefined;
-  }
-
-  /**
    * Pulse DTR to make the bootloader enter DFU mode.
    *
    * Nordic's reference transport does this whenever the touch step is
@@ -446,7 +429,13 @@ export class DfuLink {
         ]);
       } catch (e) {
         if (e instanceof DfuError) throw e;
-        throw new DfuError('TRANSFER_FAILED', 'serial read failed');
+        // A read that rejects means the device went away underneath us.
+        // On this hardware that is a reboot: the board resets, the USB
+        // connection drops, and the port comes back under a new number.
+        throw new DfuError(
+          'TRANSFER_FAILED',
+          'the board stopped talking — it rebooted or was disconnected mid-transfer',
+        );
       }
       if (chunk.done) {
         throw new DfuError('TRANSFER_FAILED', 'port closed while waiting for an ACK');
@@ -524,6 +513,19 @@ export interface DfuFlashRequest {
    * was built for this image, not one synthesised at flash time.
    */
   initPacket: Uint8Array;
+  /**
+   * Pulse DTR before writing, to make the bootloader enter DFU mode.
+   *
+   * Off by default, and the reason is specific to the browser. Nordic's
+   * reference transport pulses DTR whenever the touch step is off, but it
+   * uses pyserial, where DTR is a hardware line and the USB connection
+   * survives the edge. Under Web Serial the same edge makes the board
+   * reboot, which tears the USB connection down: the port comes back
+   * under a different COM number and everything written to the old handle
+   * goes nowhere. The board's own mass-storage mode and the DFU protocol
+   * can be entered by hand instead, by double-tapping RESET.
+   */
+  dtrPulse?: boolean;
 }
 
 /**
@@ -575,22 +577,22 @@ export async function flashNrfDfu(
     opened = true;
     cb.onLog(`[dfu] port open at ${DFU_BAUD} baud, ${packets.data.length} data packets`);
 
-    // Pulse DTR: on a Feather-style bootloader this edge is what switches
-    // the device from its mass-storage mode into the DFU protocol. The
-    // reference transport does it whenever the touch step is off.
-    //
-    // The edge can also reboot the board, which tears down the USB
-    // connection and makes the handle we hold useless — the port comes back
-    // under a different COM number and the old SerialPort object refuses to
-    // open. So after the pulse the port is checked, and if it died the
-    // bootloader is looked up again and reopened.
-    const dtr = await link.pulseDtr();
-    cb.onLog(dtr
-      ? '[dfu] DTR pulsed to switch the bootloader into DFU mode'
-      : '[dfu] DTR not supported on this port; assuming the board is already in DFU mode');
+    if (req.dtrPulse === true) {
+      // Pulse DTR: on a Feather-style bootloader this edge is what switches
+      // the device from its mass-storage mode into the DFU protocol.
+      //
+      // Under Web Serial the edge also reboots the board, and the reboot
+      // takes the USB connection down with it. The port comes back a
+      // moment later — usually under the same COM number, sometimes a
+      // different one — so the wait is generous and the port is looked up
+      // again and reopened before anything is sent. pyserial does not need
+      // any of this, which is why the reference implementation gets away
+      // with a single DTR toggle.
+      cb.onLog('[dfu] pulsing DTR to switch the bootloader into DFU mode');
+      await link.pulseDtr();
+      cb.onLog('[dfu] waiting for the board to re-enumerate');
+      await sleep(RE_ENUMERATE_WAIT_MS);
 
-    if (dtr && !(await link.isAlive())) {
-      cb.onLog('[dfu] the port went away after the DTR pulse; looking for the board again');
       await link.close();
       opened = false;
       const current = await findBootloaderPort(port);
@@ -633,7 +635,6 @@ export async function flashNrfDfu(
     });
     cb.onLog(`[dfu] init packet: ${packets.init.length} bytes ` +
       `(${req.image.length} image bytes, base 0x${req.startAddress.toString(16)})`);
-
     if (packets.erase.length) {
       cb.onPhase('erasing');
       cb.onLog(`[dfu] erasing ${packets.erase.length} pages first`);

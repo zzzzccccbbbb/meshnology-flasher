@@ -103,6 +103,17 @@ let nrfErase = false;
  */
 let nrfAutoReset = false;
 
+/**
+ * Pulse DTR before writing.
+ *
+ * Off by default. Nordic's reference transport pulses DTR to make the
+ * bootloader enter DFU mode, but it uses pyserial, where DTR is a hardware
+ * line and the USB connection survives. In a browser the same edge
+ * reboots the board and takes the USB connection down, so the port has to
+ * be found and reopened again before anything can be written.
+ */
+let nrfDtrPulse = false;
+
 interface Preselected {
   deviceId: string | null;
   version: string | null;
@@ -252,6 +263,11 @@ app.innerHTML = `
                 <span data-i18n="nrfAutoResetLabel">${t().nrfAutoResetLabel}</span>
               </label>
               <p class="config-hint" data-i18n="nrfAutoResetHint">${t().nrfAutoResetHint}</p>
+              <label class="check">
+                <input type="checkbox" id="nrfDtrPulse" />
+                <span data-i18n="nrfDtrPulseLabel">${t().nrfDtrPulseLabel}</span>
+              </label>
+              <p class="config-hint" data-i18n="nrfDtrPulseHint">${t().nrfDtrPulseHint}</p>
             </div>
             <div id="drop" class="drop">
               <div class="upload-icon">↑</div>
@@ -851,7 +867,7 @@ async function runNrfFlash(): Promise<void> {
 
     await flashNrfDfu(
       nrfDevice as SerialPort,
-      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: nrfAutoReset, initPacket: img.initPacket },
+      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: nrfAutoReset, dtrPulse: nrfDtrPulse, initPacket: img.initPacket },
       {
         onPhase: phase => {
           const phaseName = phaseText[phase];
@@ -1161,6 +1177,13 @@ chipFamilySel.addEventListener('change', () => {
 $<HTMLInputElement>('#nrfErase').addEventListener('change', e => {
   nrfErase = (e.target as HTMLInputElement).checked;
   if (nrfErase) termWrite('[dfu] erase-before-write enabled');
+});
+
+$<HTMLInputElement>('#nrfDtrPulse').addEventListener('change', e => {
+  nrfDtrPulse = (e.target as HTMLInputElement).checked;
+  termWrite(nrfDtrPulse
+    ? '[dfu] DTR will be pulsed; the board reboots and the port is reopened afterwards'
+    : '[dfu] no DTR pulse: put the board in DFU mode (double-tap RESET) first');
 });
 
 $<HTMLInputElement>('#nrfAutoReset').addEventListener('change', e => {

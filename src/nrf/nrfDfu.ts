@@ -57,6 +57,15 @@ export const TOUCH_RESET_WAIT_TIME = 1.5;
 export const DTR_LOW_MS = 50;
 /** Settling time after the DTR edge. */
 export const DTR_RESET_WAIT_MS = 100;
+/**
+ * How long to wait for the board to come back after it reboots.
+ *
+ * A USB device re-enumerating takes a moment: the old device is removed,
+ * the new one is enumerated, and the driver binds it. Half a second is
+ * usually enough, but the wait is generous because getting it wrong means
+ * the whole transfer fails.
+ */
+export const RE_ENUMERATE_WAIT_MS = 1500;
 
 const SLIP_END = 0xc0;
 const SLIP_ESC = 0xdb;
