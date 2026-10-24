@@ -97,6 +97,31 @@ describe('HCI framing', () => {
     expect(len >= 0).toBe(true);
   });
 
+  it('matches the reference frame byte for byte', () => {
+    // Nordic's reference transport, for a START packet carrying a 462,620
+    // byte application and sequence number 1:
+    //
+    //   c0 d1 4e 01 e0 03 00 00 00 04 00 00 00 00 00 00 00 00 00 00
+    //   00 1c 0f 07 00 58 4e c0
+    //
+    // The header byte is seq | (seq+1)<<3 | dip<<6 | rp<<7 — the data
+    // integrity and reliable-packet bits have to be set, or the
+    // bootloader ignores the frame.
+    HciSequence.reset();
+    const payload = Uint8Array.from([
+      ...u32le(DFU_OP_START),
+      ...u32le(DFU_UPDATE_MODE_APP),
+      ...u32le(0),
+      ...u32le(0),
+      ...u32le(462620),
+    ]);
+    const frame = slipEncode(buildHciPacket(payload));
+    expect([...frame].map(b => b.toString(16).padStart(2, '0')).join(' ')).toBe(
+      'c0 d1 4e 01 e0 03 00 00 00 04 00 00 00 00 00 00 00 00 00 00 ' +
+      '00 1c 0f 07 00 58 4e c0',
+    );
+  });
+
   it('appends a CRC over the header and payload', () => {
     HciSequence.reset();
     const payload = Uint8Array.from([9, 8, 7]);

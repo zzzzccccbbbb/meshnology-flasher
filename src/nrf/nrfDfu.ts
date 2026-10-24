@@ -166,7 +166,13 @@ export class HciSequence {
 export function buildHciPacket(payload: Uint8Array, type = 14): Uint8Array {
   const seq = HciSequence.next();
   const length = payload.length;
-  const b0 = seq | (((seq + 1) % 8) << 3);
+  // dip = data integrity check present, rp = reliable packet. Nordic's
+  // reference sets both on every DFU packet, and the bootloader checks
+  // them: a frame without them is silently ignored, which is why the
+  // board used to not answer at all.
+  const dip = 1;
+  const rp = 1;
+  const b0 = seq | (((seq + 1) % 8) << 3) | (dip << 6) | (rp << 7);
   const b1 = type | ((length & 0x000f) << 4);
   const b2 = (length & 0x0ff0) >> 4;
   const b3 = (~(b0 + b1 + b2) + 1) & 0xff;
