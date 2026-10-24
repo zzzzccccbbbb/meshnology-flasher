@@ -76,13 +76,15 @@ describe('SLIP', () => {
 });
 
 describe('HCI framing', () => {
-  it('sequences 0..7 and wraps', () => {
+  it('sequences 1..7 then 0 and wraps', () => {
+    // Nordic's reference transport keeps the counter at 0 and increments
+    // before use, so the first packet carries sequence 1.
     HciSequence.reset();
     const seqs: number[] = [];
     for (let i = 0; i < 9; i++) {
       seqs.push(buildHciPacket(Uint8Array.from([i]))[0] & 0x07);
     }
-    expect(seqs).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 0]);
+    expect(seqs).toEqual([1, 2, 3, 4, 5, 6, 7, 0, 1]);
   });
 
   it('packs the length across the two length nibbles', () => {
@@ -238,13 +240,13 @@ describe('eraseWaitSeconds', () => {
 describe('parseAck', () => {
   it('reads the sequence nibble from the HCI header', () => {
     // The ACK carries the sequence number the *next* packet should use, which
-    // is one past the header's own sequence: header 0 -> ACK 1, header 1 -> ACK 2.
+    // is one past the header's own sequence: header 1 -> ACK 2, header 2 -> ACK 3.
     HciSequence.reset();
     const p0 = buildHciPacket(Uint8Array.from([0]));
-    expect(p0[0] & 0x07).toBe(0);
-    expect(parseAck(slipEncode(p0))).toBe(1);
+    expect(p0[0] & 0x07).toBe(1);
+    expect(parseAck(slipEncode(p0))).toBe(2);
     const p1 = buildHciPacket(Uint8Array.from([0]));
-    expect(p1[0] & 0x07).toBe(1);
-    expect(parseAck(slipEncode(p1))).toBe(2);
+    expect(p1[0] & 0x07).toBe(2);
+    expect(parseAck(slipEncode(p1))).toBe(3);
   });
 });

@@ -25,6 +25,8 @@ import {
   DFU_BAUD,
   SERIAL_PORT_OPEN_WAIT_TIME,
   TOUCH_RESET_WAIT_TIME,
+  DTR_LOW_MS,
+  DTR_RESET_WAIT_MS,
   FLASH_PAGE_ERASE_TIME,
   FLASH_PAGE_WRITE_TIME,
   type DfuPackets,
@@ -288,19 +290,99 @@ export class DfuLink {
   }
 
   /**
+   * Pulse DTR to make the bootloader enter DFU mode.
+   *
+   * Nordic's reference transport does this whenever the touch step is
+   * disabled:
+   *
+   *     self.serial_port.setDTR(False); time.sleep(0.05)
+   *     self.serial_port.setDTR(True);  time.sleep(0.1)
+   *
+   * The Feather-style bootloader on this board watches DTR: a low-to-high
+   * edge is what puts it into the DFU protocol. Without the pulse it stays
+   * in its mass-storage mode and never answers a DFU packet — which is
+   * exactly the "no response from the bootloader" the page reported.
+   *
+   * Web Serial exposes the modem lines through setSignals(). A board that
+   * does not support them throws, which is not fatal: the user may have
+   * entered DFU by hand.
+   */
+  async pulseDtr(): Promise<boolean> {
+    const signals = this.port as unknown as {
+      setSignals?: (s: { dataTerminalReady: boolean; requestToSend: boolean }) => Promise<void>;
+    };
+    if (typeof signals.setSignals !== 'function') return false;
+    try {
+      await signals.setSignals({ dataTerminalReady: false, requestToSend: true });
+      await sleep(DTR_LOW_MS);
+      await signals.setSignals({ dataTerminalReady: true, requestToSend: true });
+      await sleep(DTR_RESET_WAIT_MS);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Send one framed packet and wait for its ACK.
    *
    * The bootloader answers with a two-delimiter SLIP frame. Bytes may arrive
    * with stale content before the opening 0xC0 (the reset banner, for
    * instance), so the reader counts delimiters rather than assuming the
    * first byte is one.
+   *
+   * The ACK check follows Nordic's own reference implementation
+   * (nordicsemi/dfu/dfu_transport_serial.py):
+   *
+   *   * the first packet after opening is *not* sequence-checked — the
+   *     reference breaks out of its retry loop on the first response
+   *     whatever it says, because the board may answer with a stale
+   *     sequence from before the reset
+   *   * every later packet must carry the sequence one past the last
+   *     accepted one
+   *   * a packet that is not acknowledged is re-sent, and three failures
+   *     abort the transfer
    */
   async send(packet: Uint8Array, timeoutMs = 5000): Promise<void> {
     if (!this.writer || !this.reader) throw new DfuError('TRANSFER_FAILED', 'port not open');
 
-    await this.writer.write(slipEncode(packet));
+    let lastAck: number | null = null;
+    let attempts = 0;
 
-    const expected = (this.lastAck + 1) % 8;
+    while (true) {
+      attempts++;
+      await this.writer.write(slipEncode(packet));
+      const ack = await this.readAck(timeoutMs);
+
+      // The first response is accepted as-is, matching the reference.
+      if (lastAck === null) {
+        lastAck = ack;
+        this.lastAck = ack;
+        return;
+      }
+      if (ack === (lastAck + 1) % 8) {
+        lastAck = ack;
+        this.lastAck = ack;
+        return;
+      }
+      // Not the expected sequence — the packet was lost or the board
+      // answered out of order. Send it again.
+      if (attempts >= 3) {
+        this.lastAck = -1;
+        HciSequence.reset();
+        throw new DfuError(
+          'ACK_MISMATCH',
+          `the bootloader did not acknowledge packet ${attempts} times ` +
+          `(expected ACK ${(lastAck + 1) % 8}, got ${ack})`,
+        );
+      }
+    }
+  }
+
+  /** Read one SLIP-framed ACK and return its sequence number. */
+  private async readAck(timeoutMs: number): Promise<number> {
+    if (!this.reader) throw new DfuError('TRANSFER_FAILED', 'port not open');
+
     const deadline = Date.now() + timeoutMs;
     let buffer: number[] = [];
     let delimiters = 0;
@@ -338,24 +420,24 @@ export class DfuLink {
       throw new DfuError('ACK_MISMATCH', 'incomplete ACK frame');
     }
 
+    // The reference decodes the escapes over the whole buffer and then
+    // strips the leading and trailing 0xC0, so the first decoded byte is
+    // the HCI header whose low three bits carry the ACK number.
     let decoded: Uint8Array;
     try {
-      decoded = slipDecode(Uint8Array.from(buffer.slice(first + 1, second)));
+      decoded = slipDecode(Uint8Array.from(buffer));
     } catch (e) {
       throw new DfuError('ACK_MISMATCH', (e as Error).message);
     }
-    if (decoded.length < 2) throw new DfuError('ACK_MISMATCH', 'ACK frame too short');
+    // Strip the two delimiters that survived the escape decoding.
+    let start = 0;
+    let end = decoded.length;
+    while (start < end && decoded[start] === 0xc0) start++;
+    while (end > start && decoded[end - 1] === 0xc0) end--;
+    const body = decoded.subarray(start, end);
+    if (body.length < 1) throw new DfuError('ACK_MISMATCH', 'ACK frame too short');
 
-    const ack = parseAck(Uint8Array.from(buffer.slice(first + 1, second)));
-    if (this.lastAck !== -1 && ack !== expected) {
-      this.lastAck = -1;
-      HciSequence.reset();
-      throw new DfuError(
-        'ACK_MISMATCH',
-        `out-of-sequence ACK: expected ${expected}, got ${ack}`,
-      );
-    }
-    this.lastAck = ack;
+    return (body[0] >> 3) & 0x07;
   }
 }
 
@@ -429,6 +511,14 @@ export async function flashNrfDfu(
     await link.openWithRetry();
     opened = true;
     cb.onLog(`[dfu] port open at ${DFU_BAUD} baud, ${packets.data.length} data packets`);
+
+    // Pulse DTR: on a Feather-style bootloader this edge is what switches
+    // the device from its mass-storage mode into the DFU protocol. The
+    // reference transport does it whenever the touch step is off.
+    const dtr = await link.pulseDtr();
+    cb.onLog(dtr
+      ? '[dfu] DTR pulsed to switch the bootloader into DFU mode'
+      : '[dfu] DTR not supported on this port; assuming the board is already in DFU mode');
 
     const check = () => {
       if (signal?.aborted) throw new DfuError('ABORTED', 'cancelled');

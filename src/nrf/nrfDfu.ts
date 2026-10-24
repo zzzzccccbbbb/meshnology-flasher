@@ -53,6 +53,10 @@ export const DFU_TOUCH_BAUD = 1200;
 export const DFU_BAUD = 115200;
 export const SERIAL_PORT_OPEN_WAIT_TIME = 0.1;
 export const TOUCH_RESET_WAIT_TIME = 1.5;
+/** DTR is held low for this long before being released. */
+export const DTR_LOW_MS = 50;
+/** Settling time after the DTR edge. */
+export const DTR_RESET_WAIT_MS = 100;
 
 const SLIP_END = 0xc0;
 const SLIP_ESC = 0xdb;
@@ -131,16 +135,22 @@ export function slipDecode(data: Uint8Array): Uint8Array {
  *  HCI framing
  * ------------------------------------------------------------------ */
 
-/** Sequence numbers cycle 0..7; a static keeps them shared across packets. */
+/** Sequence numbers cycle 1..7 then back to 0; a static keeps them shared
+ *  across packets.
+ *
+ *  The numbering starts at 1, not 0: Nordic's own reference implementation
+ *  increments before use (HciPacket.sequence_number = (n + 1) % 8), and
+ *  the bootloader computes the expected ACK from the same rule. Starting at
+ *  0 makes every ACK mismatch by one.
+ */
 export class HciSequence {
   private static value = 0;
   static reset(): void {
     HciSequence.value = 0;
   }
   static next(): number {
-    const v = HciSequence.value;
-    HciSequence.value = (v + 1) % 8;
-    return v;
+    HciSequence.value = (HciSequence.value + 1) % 8;
+    return HciSequence.value;
   }
 }
 
