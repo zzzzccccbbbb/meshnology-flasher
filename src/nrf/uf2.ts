@@ -43,6 +43,13 @@ const UF2_MAGIC_END_OFFSET = 508;
 /** Erased flash byte. */
 const ERASED = 0xff;
 
+/**
+ * UICR — the nRF52 user configuration register block, at 0x10001000.
+ * Outside the 1 MB flash, written with a dedicated J-Link/nrfprog procedure
+ * rather than as part of an image.
+ */
+const UICR_BASE = 0x10001000;
+
 const FLAG_NOT_MAIN_FLASH = 1 << 0;
 const FLAG_FILE_CONTAINER = 1 << 1;
 const FLAG_FAMILY_ID_PRESENT = 1 << 2;
@@ -188,7 +195,17 @@ export function toSparseImage(segments: HexSegment[]): SparseImage {
   if (!Number.isFinite(start)) throw new HexParseError('all segments are empty');
 
   const size = end - start;
-  // A whole-chip image is 1 MB; anything much larger is a bad HEX.
+  // The DFU and UF2 paths both address flash linearly; neither can express
+  // UICR at 0x10001000, and flattening the gap between 0x0 and there would
+  // allocate hundreds of megabytes for 8 bytes of configuration. A HEX that
+  // carries UICR is a full-chip image meant for a programmer (J-Link,
+  // nrfprog), not for a bootloader write.
+  if (end > UICR_BASE) {
+    throw new HexParseError(
+      `image reaches 0x${end.toString(16)}, inside or past UICR (0x${UICR_BASE.toString(16)}) — ` +
+      'this is a full-chip image for a hardware programmer, not a serial DFU payload',
+    );
+  }
   if (size > 64 * 1024 * 1024) {
     throw new HexParseError(`image spans ${size} bytes, which is implausible`);
   }
