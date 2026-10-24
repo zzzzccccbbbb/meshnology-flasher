@@ -71,7 +71,7 @@ export function isWebSerialAvailable(): boolean {
   return typeof navigator !== 'undefined' && 'serial' in navigator;
 }
 
-/** Ask the user to pick the board's CDC port. */
+/** Ask the user to pick the board's serial port. */
 export async function requestDfuPort(): Promise<SerialPort> {
   if (!isWebSerialAvailable()) {
     throw new DfuError('NO_WEBSERIAL', 'Web Serial is not available in this browser');
@@ -87,8 +87,74 @@ export async function requestDfuPort(): Promise<SerialPort> {
   }
 }
 
+/**
+ * The port the board is on right now, if the browser already has permission.
+ *
+ * After a touch reset the board re-enumerates: the application CDC
+ * disappears and the bootloader's CDC appears, often under a different
+ * COM number. The SerialPort object we were handed refers to the old
+ * instance and cannot be opened any more, so the bootloader has to be found
+ * again among the permitted ports.
+ *
+ * Matching is by vendor/product id, and the DFU bootloader of an nRF52
+ * reports the same 0x2FE3/0x0001 or 0x239A as the application, so the
+ * candidate list is narrowed by vendor id and then the most recently
+ * connected one is preferred — a board that just re-enumerated is the
+ * newest.
+ */
+export async function findBootloaderPort(
+  original: SerialPort,
+  vendorIds: number[] = [0x2fe3, 0x239a, 0x1915],
+): Promise<SerialPort> {
+  if (!isWebSerialAvailable()) return original;
+  let ports: SerialPort[] = [];
+  try {
+    ports = await navigator.serial.getPorts();
+  } catch {
+    return original;
+  }
+  if (ports.length <= 1) return original;
+
+  const candidates: SerialPort[] = [];
+  for (const p of ports) {
+    try {
+      const info = await p.getInfo();
+      if (!info.usbVendorId) continue;
+      if (vendorIds.includes(info.usbVendorId)) candidates.push(p);
+    } catch {
+      /* a port that cannot describe itself is not usable */
+    }
+  }
+  if (candidates.length === 0) return original;
+
+  // The original handle is still the best choice if it is in the list: it is
+  // the one the user picked, and Chrome's Web Serial resolves a port by
+  // vendor/product anyway.
+  if (candidates.includes(original)) return original;
+  return candidates[candidates.length - 1];
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
+}
+
+/**
+ * The other serial ports the browser already has permission for.
+ *
+ * After a board re-enumerates into its bootloader it may land on a
+ * different COM number, and the handle we were handed then refers to a USB
+ * instance that no longer exists. getPorts() lists what is currently
+ * plugged in and permitted, so the new bootloader port shows up there.
+ */
+async function otherPermittedPorts(exclude: SerialPort): Promise<SerialPort[]> {
+  if (!isWebSerialAvailable()) return [];
+  let ports: SerialPort[] = [];
+  try {
+    ports = await navigator.serial.getPorts();
+  } catch {
+    return [];
+  }
+  return ports.filter(p => p !== exclude);
 }
 
 /* ------------------------------------------------------------------ *
@@ -108,7 +174,12 @@ export class DfuLink {
   private lastAck = -1;
   private pending: number[] = [];
 
-  constructor(private readonly port: SerialPort) {}
+  constructor(private port: SerialPort) {}
+
+  /** Point the link at a different port, e.g. after the board re-enumerated. */
+  setPort(port: SerialPort): void {
+    this.port = port;
+  }
 
   /**
    * Reboot the board into DFU mode: open at 1200 baud, close, wait.
@@ -122,19 +193,24 @@ export class DfuLink {
    * the caller has to retry rather than assume one open will do.
    */
   static async touchReset(port: SerialPort): Promise<void> {
+    let touched = false;
     try {
       await port.open({ baudRate: DFU_TOUCH_BAUD });
+      touched = true;
     } catch {
       // A board whose CDC is already open elsewhere cannot be touched. It may
       // already be sitting in DFU, so carry on and let the open below decide.
-      return;
     }
-    await sleep(SERIAL_PORT_OPEN_WAIT_TIME * 1000);
-    try {
-      await port.close();
-    } catch {
-      /* already closed */
+    if (touched) {
+      await sleep(SERIAL_PORT_OPEN_WAIT_TIME * 1000);
+      try {
+        await port.close();
+      } catch {
+        /* already closed */
+      }
     }
+    // Wait for the re-enumeration either way: if the touch did work the board
+    // is rebooting, and if it did not the board may still be settling.
     await sleep(TOUCH_RESET_WAIT_TIME * 1000);
   }
 
@@ -148,22 +224,32 @@ export class DfuLink {
    *                                   and the browser still holds it
    *
    * The second one needs a close first, so every failed attempt is followed
-   * by a close attempt before the next open.
+   * by a full close before the next open.
+   *
+   * The board may also have come back as a *different* port — the
+   * bootloader's CDC often gets a new COM number. So each round also tries
+   * the other ports the browser already has permission for, which is what
+   * lets the write find the bootloader after a re-enumeration.
    */
   async openWithRetry(attempts = 12, delayMs = 500): Promise<void> {
     let lastError = '';
     for (let i = 0; i < attempts; i++) {
       if (i > 0) await sleep(delayMs);
-      try {
-        await this.open();
-        return;
-      } catch (e) {
-        lastError = (e as Error).message ?? String(e);
-        // A half-open port blocks the next attempt; release it.
+
+      // Try the port we were given first, then any other permitted port.
+      const candidates = [this.port, ...(await otherPermittedPorts(this.port))];
+
+      for (const candidate of candidates) {
         try {
-          await this.port.close();
-        } catch {
-          /* nothing to close */
+          this.port = candidate;
+          await this.open();
+          return;
+        } catch (e) {
+          lastError = (e as Error).message ?? String(e);
+          // A half-open port blocks the next attempt, and the writer/reader
+          // locks taken by a failed open stay attached to it. this.close()
+          // releases both, in the right order.
+          await this.close();
         }
       }
     }
@@ -319,14 +405,21 @@ export async function flashNrfDfu(
       cb.onPhase('entering-dfu');
       cb.onLog('[dfu] 1200-baud touch reset to enter the bootloader');
       await DfuLink.touchReset(port);
+      // The board re-enumerated, so the handle we were given may point at a
+      // USB instance that no longer exists. Look for the bootloader again.
+      const current = await findBootloaderPort(port);
+      if (current !== port) {
+        cb.onLog('[dfu] the board re-enumerated; using the re-found port');
+        link.setPort(current);
+      }
     } else {
       cb.onLog('[dfu] using the port as-is (no touch reset)');
     }
     if (signal?.aborted) throw new DfuError('ABORTED', 'cancelled');
 
     cb.onPhase('opening');
-    // The board re-enumerates after the touch reset, so the handle we were
-    // given can be briefly unusable. Retry rather than fail on the first try.
+    // The board re-enumerates after the touch reset, so the handle can be
+    // briefly unusable. Retry rather than fail on the first try.
     await link.openWithRetry();
     opened = true;
     cb.onLog(`[dfu] port open at ${DFU_BAUD} baud, ${packets.data.length} data packets`);
