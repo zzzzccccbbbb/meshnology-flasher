@@ -467,14 +467,24 @@ export interface DfuFlashRequest {
   touchReset?: boolean;
   /** Give up after this long without progress, in ms. */
   timeoutMs?: number;
+  /**
+   * The DFU init packet — the "firmware.dat" content.
+   *
+   * It names the device type and revision, the SoftDevice the board must
+   * already carry, and the CRC of the image. The bootloader checks all of
+   * it and refuses the write on a mismatch, so it must be the packet that
+   * was built for this image, not one synthesised at flash time.
+   */
+  initPacket: Uint8Array;
 }
 
 /**
  * Push an image into the bootloader.
  *
- * Sequence: INIT (the page list) -> [ERASE_PAGE *] -> START (which erases the
- * pages INIT named, so this is where the real erase happens) -> DATA* ->
- * STOP. The board reboots into its application on its own once STOP lands.
+ * Sequence: START (which carries the image sizes and triggers the erase) ->
+ * wait for the erase -> INIT (the device/revision/SoftDevice/CRC packet) ->
+ * [ERASE_PAGE *] -> DATA* -> STOP. The board reboots into its application on
+ * its own once STOP lands.
  */
 export async function flashNrfDfu(
   port: SerialPort,
@@ -484,7 +494,12 @@ export async function flashNrfDfu(
 ): Promise<{ bytesWritten: number }> {
   if (req.image.length === 0) throw new DfuError('TRANSFER_FAILED', 'empty firmware image');
 
-  const packets: DfuPackets = buildDfuPackets(req.image, req.startAddress, { erase: req.erase });
+  const packets: DfuPackets = buildDfuPackets(
+    req.image,
+    req.initPacket,
+    req.startAddress,
+    { erase: req.erase },
+  );
   const link = new DfuLink(port);
   let opened = false;
 
@@ -524,6 +539,23 @@ export async function flashNrfDfu(
       if (signal?.aborted) throw new DfuError('ABORTED', 'cancelled');
     };
 
+    // Nordic's reference transport sends START before INIT:
+    //
+    //     send_start_dfu(...)   -> START, then sleep(erase_wait)
+    //     send_init_packet(...) -> INIT
+    //     send_firmware(...)    -> DATA..., STOP
+    //
+    // START carries the image sizes, so it has to go out first, and the
+    // board spends the time right after it erasing the pages the image
+    // covers. Data sent during that window is dropped on the floor, which
+    // is what the earlier ordering (INIT first) ran into.
+    cb.onPhase('start');
+    check();
+    await link.send(packets.start, req.timeoutMs ?? 30000);
+    const wait = eraseWaitSeconds(req.image.length);
+    cb.onLog(`[dfu] start accepted, waiting ${wait.toFixed(2)}s for the erase`);
+    await sleep(wait * 1000);
+
     cb.onPhase('init');
     check();
     await link.send(packets.init);
@@ -539,15 +571,6 @@ export async function flashNrfDfu(
         await sleep(FLASH_PAGE_ERASE_TIME * 1000);
       }
     }
-
-    cb.onPhase('start');
-    check();
-    await link.send(packets.start, req.timeoutMs ?? 30000);
-    // START has begun erasing the pages named in the init packet and will not
-    // accept DATA until that finishes.
-    const wait = eraseWaitSeconds(req.image.length);
-    cb.onLog(`[dfu] start accepted, waiting ${wait.toFixed(2)}s for the erase`);
-    await sleep(wait * 1000);
 
     cb.onPhase('writing');
     let sent = 0;

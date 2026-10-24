@@ -161,34 +161,64 @@ describe('DFU opcodes', () => {
 });
 
 describe('buildInitPacket', () => {
-  it('emits one u32 per flash page', () => {
-    const init = buildInitPacket(FLASH_PAGE_SIZE * 3, 0);
-    expect(init.length).toBe(3 * 4);
+  it('lays out the fields the bootloader checks', () => {
+    const init = buildInitPacket({
+      deviceType: 0x0052,
+      deviceRevision: 0xadaf,
+      applicationVersion: 0xffffffff,
+      softdeviceReq: [0x0123],
+      firmwareCrc16: 0xea69,
+    });
+    // 2 + 2 + 4 + 2 + 2 (one softdevice id) + 2 (crc)
+    expect(init.length).toBe(14);
     const view = new DataView(init.buffer);
-    expect(view.getUint32(0, true)).toBe(0);
-    expect(view.getUint32(4, true)).toBe(FLASH_PAGE_SIZE);
-    expect(view.getUint32(8, true)).toBe(FLASH_PAGE_SIZE * 2);
+    expect(view.getUint16(0, true)).toBe(0x0052);
+    expect(view.getUint16(2, true)).toBe(0xadaf);
+    expect(view.getUint32(4, true)).toBe(0xffffffff);
+    expect(view.getUint16(8, true)).toBe(1);
+    expect(view.getUint16(10, true)).toBe(0x0123);
+    expect(view.getUint16(12, true)).toBe(0xea69);
   });
 
-  it('rounds a partial page up', () => {
-    const init = buildInitPacket(FLASH_PAGE_SIZE + 1, 0);
-    expect(init.length).toBe(2 * 4);
+  it('matches the bytes Adafruit nrfutil writes for the W13', () => {
+    // firmware.dat from w13-meshnology.dfu
+    const init = buildInitPacket({
+      deviceType: 0x0052,
+      deviceRevision: 0xadaf,
+      applicationVersion: 0xffffffff,
+      softdeviceReq: [0x0123],
+      firmwareCrc16: 0xea69,
+    });
+    expect([...init].map(b => b.toString(16).padStart(2, '0')).join('')).toBe(
+      '5200afadffffffff0100230169ea',
+    );
   });
 
-  it('honours a non-zero base address', () => {
-    const init = buildInitPacket(FLASH_PAGE_SIZE * 2, 0x27000);
+  it('omits the softdevice list when there is none', () => {
+    const init = buildInitPacket({
+      deviceType: 0x0001,
+      deviceRevision: 0x0002,
+      firmwareCrc16: 0x1234,
+    });
+    expect(init.length).toBe(12);
     const view = new DataView(init.buffer);
-    expect(view.getUint32(0, true)).toBe(0x27000);
-    expect(view.getUint32(4, true)).toBe(0x27000 + FLASH_PAGE_SIZE);
+    expect(view.getUint16(8, true)).toBe(0);
+    expect(view.getUint16(10, true)).toBe(0x1234);
   });
 });
 
 describe('buildDfuPackets', () => {
   const image = new Uint8Array(DFU_PACKET_MAX_SIZE * 17 + 10).fill(0x5a);
+  const init = buildInitPacket({
+    deviceType: 0x0052,
+    deviceRevision: 0xadaf,
+    softdeviceReq: [0x0123],
+    firmwareCrc16: 0xea69,
+  });
 
   it('splits the image into 512-byte DATA packets, last one short', () => {
     HciSequence.reset();
-    const { data } = buildDfuPackets(image, 0);
+    const { data } = buildDfuPackets(image, init, 0);
     expect(data.length).toBe(18);
     const last = data[17];
     // header 4 + opcode 4 + 10 payload + crc 2
@@ -197,30 +227,33 @@ describe('buildDfuPackets', () => {
 
   it('omits erase packets by default', () => {
     HciSequence.reset();
-    const { erase } = buildDfuPackets(image, 0);
+    const { erase } = buildDfuPackets(image, init, 0);
     expect(erase).toHaveLength(0);
   });
 
   it('emits one ERASE_PAGE per page when asked', () => {
     HciSequence.reset();
-    const { erase } = buildDfuPackets(image, 0, { erase: true });
+    const { erase } = buildDfuPackets(image, init, 0, { erase: true });
     // 17*512+10 bytes = 8714 -> 3 pages
     expect(erase.length).toBe(3);
   });
 
   it('reports the image size in START', () => {
     HciSequence.reset();
-    const { start } = buildDfuPackets(image, 0);
+    const { start } = buildDfuPackets(image, init, 0);
     const body = start.subarray(4, 4 + 20);
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     expect(view.getUint32(16, true)).toBe(image.length);
   });
 
-  it('base-addresses the init packet', () => {
+  it('carries the caller-supplied init packet through', () => {
     HciSequence.reset();
-    const { init } = buildDfuPackets(image, 0x27000);
-    const view = new DataView(init.buffer, init.byteOffset, init.byteLength);
-    expect(view.getUint32(0, true)).toBe(0x27000);
+    const { init: sent } = buildDfuPackets(image, init, 0x27000);
+    // 4 header + 4 opcode + 14 init packet + 2 padding + 2 crc
+    expect(sent.length).toBe(4 + 4 + 14 + 2 + 2);
+    const view = new DataView(sent.buffer, sent.byteOffset, sent.byteLength);
+    expect(view.getUint16(8, true)).toBe(0x0052);
+    expect(view.getUint16(10, true)).toBe(0xadaf);
   });
 });
 

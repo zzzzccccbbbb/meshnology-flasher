@@ -851,7 +851,7 @@ async function runNrfFlash(): Promise<void> {
 
     await flashNrfDfu(
       nrfDevice as SerialPort,
-      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: nrfAutoReset },
+      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: nrfAutoReset, initPacket: img.initPacket },
       {
         onPhase: phase => {
           const phaseName = phaseText[phase];

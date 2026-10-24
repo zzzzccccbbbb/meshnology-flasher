@@ -188,23 +188,46 @@ export function buildHciPacket(payload: Uint8Array, type = 14): Uint8Array {
  * ------------------------------------------------------------------ */
 
 /**
- * Build the DFU init packet from a flat image.
+ * Build the DFU init packet.
  *
- * The init packet is one little-endian uint32 per flash page the image
- * touches, in ascending order. The bootloader uses it to know what to erase
- * and how many DATA packets to expect, so it has to match the image exactly.
+ * The init packet is the "firmware.dat" that ships inside a DFU package: a
+ * fixed set of fields describing the image, not a page list.
  *
- * `startAddress` matters: for a merged SoftDevice + app image like the W13,
- * the pages run from 0. For an app-only image the base is where the app
- * lives (0x27000 on that board).
+ *   u16 device_type
+ *   u16 device_revision
+ *   u32 application_version
+ *   u16 count, then count * u16 softdevice_req
+ *   u16 firmware_crc16
+ *
+ * A 14-byte packet with one SoftDevice requirement is what Adafruit's
+ * nrfutil produces for the W13: 52 00 af ad ff ff ff ff 01 00 23 01 69 ea.
+ *
+ * The bootloader reads the device type, revision, SoftDevice requirement and
+ * CRC from it and refuses the write when the board does not match. The CRC
+ * is over the *image*, and the SoftDevice requirement says which SoftDevice
+ * must already be flashed.
+ *
+ * When a package carries its own .dat, that file is authoritative and is
+ * used verbatim. This function is the fallback for a bare image, where the
+ * caller has to supply the device identity and the CRC.
  */
-export function buildInitPacket(imageLength: number, startAddress: number): Uint8Array {
-  const pageCount = Math.ceil(imageLength / FLASH_PAGE_SIZE);
-  const out = new Uint8Array(pageCount * 4);
+export function buildInitPacket(opts: {
+  deviceType: number;
+  deviceRevision: number;
+  applicationVersion?: number;
+  softdeviceReq?: number[];
+  firmwareCrc16: number;
+}): Uint8Array {
+  const req = opts.softdeviceReq ?? [];
+  const out = new Uint8Array(12 + req.length * 2);
   const view = new DataView(out.buffer);
-  for (let i = 0; i < pageCount; i++) {
-    view.setUint32(i * 4, startAddress + i * FLASH_PAGE_SIZE, true);
-  }
+  view.setUint16(0, opts.deviceType & 0xffff, true);
+  view.setUint16(2, opts.deviceRevision & 0xffff, true);
+  view.setUint32(4, (opts.applicationVersion ?? 0xffffffff) >>> 0, true);
+  view.setUint16(8, req.length, true);
+  req.forEach((id, i) => view.setUint16(10 + i * 2, id & 0xffff, true));
+  // The CRC sits in the last two bytes, little-endian.
+  view.setUint16(10 + req.length * 2, opts.firmwareCrc16 & 0xffff, true);
   return out;
 }
 
@@ -267,17 +290,26 @@ export interface DfuPackets {
 /**
  * Build the whole packet sequence for one image.
  *
+ * `initPacket` is the raw firmware.dat content — device type, revision,
+ * application version, SoftDevice requirement and the image CRC. It comes
+ * from the DFU package when there is one; see buildInitPacket for the
+ * fallback shape.
+ *
  * With `erase` false the packets start erasing nothing extra: START already
  * erases exactly the pages named in the init packet. `erase` adds explicit
  * ERASE_PAGE packets first, which is what MeshCore's "Erase flash" does when
  * the user asks for a clean slate.
+ *
+ * The order the packets are *sent* in is not the order they appear here:
+ * START goes first, then INIT, then the DATA run, then STOP. See
+ * flashNrfDfu in dfuTransport.ts.
  */
 export function buildDfuPackets(
   image: Uint8Array,
+  initData: Uint8Array,
   startAddress: number,
   options: { erase?: boolean; mode?: number } = {},
 ): DfuPackets {
-  const init = buildInitPacket(image.length, startAddress);
   const mode = options.mode ?? DFU_UPDATE_MODE_APP;
 
   const data: Uint8Array[] = [];
@@ -294,7 +326,7 @@ export function buildDfuPackets(
   }
 
   return {
-    init,
+    init: initPacket(initData),
     start: startPacket(mode, 0, 0, image.length),
     data,
     stop: stopPacket(),

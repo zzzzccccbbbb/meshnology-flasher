@@ -17,6 +17,7 @@
 
 import { parseIntelHex, toSparseImage, HexParseError } from '../nrf/uf2';
 import { parseDfuPackage, describeDfuPackage } from '../nrf/dfuPackage';
+import { buildInitPacket, crc16 } from '../nrf/nrfDfu';
 import { firmwareUrl, type CatalogError } from './api';
 import { isValidSha256, type FirmwareVersion } from './types';
 
@@ -29,6 +30,18 @@ export interface NrfImage {
   endAddress: number;
   /** Number of 4 KB flash pages the image touches. */
   pages: number;
+  /**
+   * The DFU init packet the bootloader checks before writing.
+   *
+   * From a DFU package this is the package's own firmware.dat, byte for
+   * byte. For a bare image it is synthesised from the device entry plus
+   * the CRC of the image.
+   */
+  initPacket: Uint8Array;
+  /** Device type the init packet declares, e.g. 0x0052 for Adafruit. */
+  deviceType: number;
+  /** Device revision the init packet declares, e.g. 0xADAF. */
+  deviceRevision: number;
 }
 
 /**
@@ -40,8 +53,15 @@ export interface NrfImage {
  * through the app-only DFU mode would be wrong; we still accept it, because
  * the bootloader will erase and rewrite exactly the pages the init packet
  * names, but the log line makes the difference visible.
+ *
+ * The init packet is synthesised from the image, since a bare HEX carries
+ * no device identity. The CRC it declares is the CRC of the image, which
+ * is the same function Nordic's own tools use.
  */
-export function hexToNrfImage(text: string): NrfImage {
+export function hexToNrfImage(
+  text: string,
+  device: { type?: number; revision?: number; softdeviceReq?: number[] } = {},
+): NrfImage {
   let segments;
   try {
     segments = parseIntelHex(text);
@@ -53,11 +73,24 @@ export function hexToNrfImage(text: string): NrfImage {
   }
 
   const sparse = toSparseImage(segments);
+  const deviceType = device.type ?? 0x0052;
+  const deviceRevision = device.revision ?? 0xadaf;
+  const softdeviceReq = device.softdeviceReq ?? [];
+  const initPacket = buildInitPacket({
+    deviceType,
+    deviceRevision,
+    softdeviceReq,
+    firmwareCrc16: crc16(sparse.bytes),
+  });
+
   return {
     bytes: sparse.bytes,
     startAddress: sparse.start,
     endAddress: sparse.end,
     pages: Math.ceil(sparse.bytes.byteLength / 4096),
+    initPacket,
+    deviceType,
+    deviceRevision,
   };
 }
 
@@ -128,11 +161,20 @@ export async function fetchNrfFirmware(
 
   const fmt = versionFormat(version);
   if (fmt === 'bin') {
+    const deviceType = 0x0052;
+    const deviceRevision = 0xadaf;
     return {
       bytes,
       startAddress: 0,
       endAddress: bytes.byteLength,
       pages: Math.ceil(bytes.byteLength / 4096),
+      initPacket: buildInitPacket({
+        deviceType,
+        deviceRevision,
+        firmwareCrc16: crc16(bytes),
+      }),
+      deviceType,
+      deviceRevision,
     };
   }
   if (fmt === 'dfu') {
@@ -146,11 +188,30 @@ export async function fetchNrfFirmware(
       onLog(`[dfu] the board must already carry SoftDevice ${pkg.softdeviceReqLabel}; ` +
         'the bootloader refuses the write otherwise');
     }
+
+    // The package's own firmware.dat is authoritative: it carries the
+    // device type, the revision, the SoftDevice requirement and the CRC
+    // of exactly this image. Using it verbatim is what the bootloader
+    // checks the board against.
+    const deviceType = pkg.manifest.init_packet_data?.device_type ?? 0x0052;
+    const deviceRevision = pkg.manifest.init_packet_data?.device_revision ?? 0xadaf;
+    const initPacket = pkg.initPacket.byteLength
+      ? pkg.initPacket
+      : buildInitPacket({
+        deviceType,
+        deviceRevision,
+        softdeviceReq: pkg.softdeviceReq,
+        firmwareCrc16: crc16(pkg.image),
+      });
+
     return {
       bytes: pkg.image,
       startAddress: base,
       endAddress: base + pkg.image.byteLength,
       pages: Math.ceil(pkg.image.byteLength / 4096),
+      initPacket,
+      deviceType,
+      deviceRevision,
     };
   }
   return hexToNrfImage(new TextDecoder().decode(bytes));
