@@ -294,18 +294,36 @@ export function eraseWaitSeconds(totalBytes: number): number {
  *  Packets
  * ------------------------------------------------------------------ */
 
+/**
+ * The packets of one transfer, as builders rather than as bytes.
+ *
+ * Each entry is a function so that the HCI sequence number is assigned
+ * when the packet is *sent*, not when the transfer is prepared. The
+ * bootloader expects the sequence to increase by one per packet on the
+ * wire, so the order the packets are built has to be the order they go
+ * out. Building them up front, in a different order, hands out the
+ * numbers in the wrong order and the bootloader stops answering.
+ *
+ * Nordic's reference transport gets this right by construction: it
+ * creates one HciPacket immediately before sending it.
+ */
 export interface DfuPackets {
-  init: Uint8Array;
-  start: Uint8Array;
-  data: Uint8Array[];
-  stop: Uint8Array;
-  erase: Uint8Array[];
+  /** START — carries the image sizes and triggers the erase. */
+  start: () => Uint8Array;
+  /** INIT — the device/revision/SoftDevice/CRC packet. */
+  init: () => Uint8Array;
+  /** One DATA packet per DFU_PACKET_MAX_SIZE bytes, in order. */
+  data: () => Uint8Array[];
+  /** STOP — ends the transfer. */
+  stop: () => Uint8Array;
+  /** Optional explicit erase packets, one per flash page. */
+  erase: () => Uint8Array[];
 }
 
 /**
  * Build the whole packet sequence for one image.
  *
- * `initPacket` is the raw firmware.dat content — device type, revision,
+ * `initData` is the raw firmware.dat content — device type, revision,
  * application version, SoftDevice requirement and the image CRC. It comes
  * from the DFU package when there is one; see buildInitPacket for the
  * fallback shape.
@@ -314,10 +332,6 @@ export interface DfuPackets {
  * erases exactly the pages named in the init packet. `erase` adds explicit
  * ERASE_PAGE packets first, which is what MeshCore's "Erase flash" does when
  * the user asks for a clean slate.
- *
- * The order the packets are *sent* in is not the order they appear here:
- * START goes first, then INIT, then the DATA run, then STOP. See
- * flashNrfDfu in dfuTransport.ts.
  */
 export function buildDfuPackets(
   image: Uint8Array,
@@ -327,25 +341,26 @@ export function buildDfuPackets(
 ): DfuPackets {
   const mode = options.mode ?? DFU_UPDATE_MODE_APP;
 
-  const data: Uint8Array[] = [];
+  const dataChunks: Uint8Array[] = [];
   for (let i = 0; i < image.length; i += DFU_PACKET_MAX_SIZE) {
-    data.push(dataPacket(image.subarray(i, i + DFU_PACKET_MAX_SIZE)));
+    dataChunks.push(image.subarray(i, i + DFU_PACKET_MAX_SIZE));
   }
 
-  const erase: Uint8Array[] = [];
-  if (options.erase) {
-    const pageCount = Math.ceil(image.length / FLASH_PAGE_SIZE);
-    for (let i = 0; i < pageCount; i++) {
-      erase.push(erasePagePacket(startAddress + i * FLASH_PAGE_SIZE));
-    }
-  }
+  const pageCount = Math.ceil(image.length / FLASH_PAGE_SIZE);
 
   return {
-    init: initPacket(initData),
-    start: startPacket(mode, 0, 0, image.length),
-    data,
-    stop: stopPacket(),
-    erase,
+    start: () => startPacket(mode, 0, 0, image.length),
+    init: () => initPacket(initData),
+    data: () => dataChunks.map(chunk => dataPacket(chunk)),
+    stop: () => stopPacket(),
+    erase: () => {
+      if (!options.erase) return [];
+      const out: Uint8Array[] = [];
+      for (let i = 0; i < pageCount; i++) {
+        out.push(erasePagePacket(startAddress + i * FLASH_PAGE_SIZE));
+      }
+      return out;
+    },
   };
 }
 

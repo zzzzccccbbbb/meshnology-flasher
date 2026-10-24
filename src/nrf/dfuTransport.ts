@@ -575,7 +575,8 @@ export async function flashNrfDfu(
     // briefly unusable. Retry rather than fail on the first try.
     await link.openWithRetry();
     opened = true;
-    cb.onLog(`[dfu] port open at ${DFU_BAUD} baud, ${packets.data.length} data packets`);
+    cb.onLog(`[dfu] port open at ${DFU_BAUD} baud, ` +
+      `${Math.ceil(req.image.length / DFU_PACKET_DATA)} data packets`);
 
     if (req.dtrPulse === true) {
       // Pulse DTR: on a Feather-style bootloader this edge is what switches
@@ -619,9 +620,15 @@ export async function flashNrfDfu(
     // board spends the time right after it erasing the pages the image
     // covers. Data sent during that window is dropped on the floor, which
     // is what the earlier ordering (INIT first) ran into.
+    //
+    // Each packet is built right before it goes out, so the HCI sequence
+    // number on the wire increases by one per packet in the order they are
+    // sent. Building the whole batch up front handed out the numbers in
+    // the build order instead, and the bootloader stopped answering after
+    // the first couple of packets.
     cb.onPhase('start');
     check();
-    await link.send(packets.start, req.timeoutMs ?? 5000, (frame, what) => {
+    await link.send(packets.start(), req.timeoutMs ?? 5000, (frame, what) => {
       cb.onLog(`[dfu] START sent (${what}, first bytes ${hexHead(frame)}), waiting for the ack`);
     });
     const wait = eraseWaitSeconds(req.image.length);
@@ -630,15 +637,18 @@ export async function flashNrfDfu(
 
     cb.onPhase('init');
     check();
-    await link.send(packets.init, req.timeoutMs ?? 10000, (frame, what) => {
+    const initFrame = packets.init();
+    await link.send(initFrame, req.timeoutMs ?? 10000, (frame, what) => {
       cb.onLog(`[dfu] INIT sent (${what}, first bytes ${hexHead(frame)}), waiting for the ack`);
     });
-    cb.onLog(`[dfu] init packet: ${packets.init.length} bytes ` +
+    cb.onLog(`[dfu] init packet: ${initFrame.length} bytes ` +
       `(${req.image.length} image bytes, base 0x${req.startAddress.toString(16)})`);
-    if (packets.erase.length) {
+
+    const erasePackets = packets.erase();
+    if (erasePackets.length) {
       cb.onPhase('erasing');
-      cb.onLog(`[dfu] erasing ${packets.erase.length} pages first`);
-      for (const p of packets.erase) {
+      cb.onLog(`[dfu] erasing ${erasePackets.length} pages first`);
+      for (const p of erasePackets) {
         check();
         await link.send(p, req.timeoutMs ?? 5000);
         await sleep(FLASH_PAGE_ERASE_TIME * 1000);
@@ -647,9 +657,10 @@ export async function flashNrfDfu(
 
     cb.onPhase('writing');
     let sent = 0;
-    for (let i = 0; i < packets.data.length; i++) {
+    const dataChunks = packets.data();
+    for (let i = 0; i < dataChunks.length; i++) {
       check();
-      await link.send(packets.data[i]);
+      await link.send(dataChunks[i]);
       sent += Math.min(DFU_PACKET_DATA, req.image.length - sent);
       cb.onProgress(sent, req.image.length);
 
@@ -663,7 +674,7 @@ export async function flashNrfDfu(
     cb.onPhase('finishing');
     await sleep(FLASH_PAGE_WRITE_TIME * 1000);
     check();
-    await link.send(packets.stop);
+    await link.send(packets.stop());
 
     cb.onPhase('done');
     cb.onLog(`[dfu] stop accepted, ${sent} bytes written; the board will reboot`);

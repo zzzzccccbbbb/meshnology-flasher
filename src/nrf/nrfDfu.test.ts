@@ -244,8 +244,9 @@ describe('buildDfuPackets', () => {
   it('splits the image into 512-byte DATA packets, last one short', () => {
     HciSequence.reset();
     const { data } = buildDfuPackets(image, init, 0);
-    expect(data.length).toBe(18);
-    const last = data[17];
+    const packets = data();
+    expect(packets.length).toBe(18);
+    const last = packets[17];
     // header 4 + opcode 4 + 10 payload + crc 2
     expect(last.length).toBe(4 + 4 + 10 + 2);
   });
@@ -253,20 +254,20 @@ describe('buildDfuPackets', () => {
   it('omits erase packets by default', () => {
     HciSequence.reset();
     const { erase } = buildDfuPackets(image, init, 0);
-    expect(erase).toHaveLength(0);
+    expect(erase()).toHaveLength(0);
   });
 
   it('emits one ERASE_PAGE per page when asked', () => {
     HciSequence.reset();
     const { erase } = buildDfuPackets(image, init, 0, { erase: true });
     // 17*512+10 bytes = 8714 -> 3 pages
-    expect(erase.length).toBe(3);
+    expect(erase().length).toBe(3);
   });
 
   it('reports the image size in START', () => {
     HciSequence.reset();
     const { start } = buildDfuPackets(image, init, 0);
-    const body = start.subarray(4, 4 + 20);
+    const body = start().subarray(4, 4 + 20);
     const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
     expect(view.getUint32(16, true)).toBe(image.length);
   });
@@ -274,11 +275,28 @@ describe('buildDfuPackets', () => {
   it('carries the caller-supplied init packet through', () => {
     HciSequence.reset();
     const { init: sent } = buildDfuPackets(image, init, 0x27000);
+    const frame = sent();
     // 4 header + 4 opcode + 14 init packet + 2 padding + 2 crc
-    expect(sent.length).toBe(4 + 4 + 14 + 2 + 2);
-    const view = new DataView(sent.buffer, sent.byteOffset, sent.byteLength);
+    expect(frame.length).toBe(4 + 4 + 14 + 2 + 2);
+    const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
     expect(view.getUint16(8, true)).toBe(0x0052);
     expect(view.getUint16(10, true)).toBe(0xadaf);
+  });
+
+  it('numbers the packets in the order they are sent', () => {
+    // The bootloader counts the sequence up by one per packet on the wire.
+    // The packets are built lazily, so building START and then INIT gives
+    // them sequence 1 and 2 — building the whole batch up front used to
+    // hand out the numbers in the build order and the board stopped
+    // answering after the first couple of packets.
+    HciSequence.reset();
+    const packets = buildDfuPackets(image, init, 0);
+    const start = packets.start();
+    const initFrame = packets.init();
+    const first = packets.data()[0];
+    expect(start[0] & 0x07).toBe(1);
+    expect(initFrame[0] & 0x07).toBe(2);
+    expect(first[0] & 0x07).toBe(3);
   });
 });
 
