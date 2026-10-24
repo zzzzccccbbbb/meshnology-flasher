@@ -108,6 +108,7 @@ export async function requestDfuPort(): Promise<SerialPort> {
 export async function findBootloaderPort(
   original: SerialPort,
   vendorIds: number[] = [0x2fe3, 0x239a, 0x1915],
+  options: { preferNew?: boolean } = {},
 ): Promise<SerialPort> {
   if (!isWebSerialAvailable()) return original;
   let ports: SerialPort[] = [];
@@ -133,8 +134,15 @@ export async function findBootloaderPort(
   // The original handle is still the best choice if it is in the list: it is
   // the one the user picked, and Chrome's Web Serial resolves a port by
   // vendor/product anyway.
-  if (candidates.includes(original)) return original;
-  return candidates[candidates.length - 1];
+  //
+  // After the board has rebooted, though, the original handle points at a
+  // USB instance that no longer exists, so it is skipped and the newest
+  // candidate is used instead — that is the one the re-enumeration
+  // produced.
+  if (!options.preferNew && candidates.includes(original)) return original;
+  const withoutOriginal = candidates.filter(p => p !== original);
+  const pool = withoutOriginal.length ? withoutOriginal : candidates;
+  return pool[pool.length - 1];
 }
 
 function sleep(ms: number): Promise<void> {
@@ -589,6 +597,13 @@ export async function flashNrfDfu(
       // again and reopened before anything is sent. pyserial does not need
       // any of this, which is why the reference implementation gets away
       // with a single DTR toggle.
+      //
+      // The pulse is done twice on purpose. One edge takes the board from
+      // the application into its bootloader, which on this bootloader is
+      // the mass-storage mode. A second edge takes it from there into the
+      // serial DFU protocol, which is the mode that answers DFU packets.
+      // Doing it once leaves the board in mass-storage mode, and the
+      // bootloader then ignores every packet.
       cb.onLog('[dfu] pulsing DTR to switch the bootloader into DFU mode');
       await link.pulseDtr();
       cb.onLog('[dfu] waiting for the board to re-enumerate');
@@ -596,7 +611,7 @@ export async function flashNrfDfu(
 
       await link.close();
       opened = false;
-      const current = await findBootloaderPort(port);
+      let current = await findBootloaderPort(port, undefined, { preferNew: true });
       if (current !== port) {
         cb.onLog('[dfu] the board re-enumerated; using the re-found port');
         link.setPort(current);
@@ -604,6 +619,21 @@ export async function flashNrfDfu(
       await link.openWithRetry();
       opened = true;
       cb.onLog(`[dfu] port re-open at ${DFU_BAUD} baud`);
+
+      // Second edge: mass-storage mode -> serial DFU protocol.
+      cb.onLog('[dfu] pulsing DTR again to enter the serial DFU protocol');
+      await link.pulseDtr();
+      await sleep(RE_ENUMERATE_WAIT_MS);
+
+      await link.close();
+      opened = false;
+      current = await findBootloaderPort(port, undefined, { preferNew: true });
+      if (current !== port) {
+        link.setPort(current);
+      }
+      await link.openWithRetry();
+      opened = true;
+      cb.onLog(`[dfu] port re-open at ${DFU_BAUD} baud, ready for the DFU handshake`);
     }
 
     const check = () => {
@@ -699,7 +729,8 @@ export function dfuErrorToMessage(err: unknown): { kind: string; message: string
       case 'NOT_IN_DFU':
         return {
           kind: err.kind,
-          message: 'The board did not respond. Unplug it, plug it back, and retry — the 1200-baud touch reset should put it in DFU mode.',
+          message: 'The board did not answer. Double-tap RESET to put it into DFU mode, ' +
+            'then flash again — or check that the right port was selected.',
         };
       case 'ACK_MISMATCH':
         return { kind: err.kind, message: `Lost sync with the bootloader: ${err.message}` };

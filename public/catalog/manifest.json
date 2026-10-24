@@ -1,15 +1,24 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-10-24T09:53:00Z",
+  "updated": "2026-10-24T10:40:00Z",
   "devices": [
     {
-      "id": "w13-meshnology",
-      "displayName": "W13 Meshnology (LCD, nRF52840)",
+      "id": "w13-meshnology-meshcore",
+      "displayName": "W13 Meshnology LCD (MeshCore, nRF52840)",
+      "vendor": "Meshnology",
+      "chip": "nRF52840",
+      "latestVersion": "1.1.0",
+      "flashSize": "1MB",
+      "notes": "MeshCore firmware. Application-only image; needs SoftDevice S140 7.3.0 already flashed"
+    },
+    {
+      "id": "w13-meshnology-meshtastic",
+      "displayName": "W13 Meshnology LCD (Meshtastic, nRF52840)",
       "vendor": "Meshnology",
       "chip": "nRF52840",
       "latestVersion": "1.0.0",
       "flashSize": "1MB",
-      "notes": "Application-only image; needs SoftDevice S140 7.3.0 already flashed"
+      "notes": "Meshtastic firmware. Application-only image; needs SoftDevice S140 7.3.0 already flashed"
     }
   ]
 }

@@ -7,7 +7,7 @@ import { nrfImageFromBytes } from './nrfReader';
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
 
-const DFU_PATH = join(repoRoot, 'public', 'firmware', 'w13-meshnology', '1.0.0.dfu');
+const DFU_PATH = join(repoRoot, 'public', 'firmware', 'w13-meshnology-meshcore', '1.0.0.dfu');
 
 describe('nrfImageFromBytes', () => {
   it('unpacks a DFU package with the package\'s own init packet', () => {

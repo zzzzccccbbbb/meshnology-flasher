@@ -1,0 +1,20 @@
+{
+  "id": "w13-meshnology-meshtastic",
+  "displayName": "W13 Meshnology LCD (Meshtastic, nRF52840)",
+  "vendor": "Meshnology",
+  "chip": "nRF52840",
+  "chipFamily": "nrf52840",
+  "flashSize": "1MB",
+  "notes": "Application-only image; SoftDevice S140 7.3.0 (FWID 0x0123) must already be flashed. Requires the Adafruit Feather UF2 bootloader.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "size": 714561,
+      "sha256": "a14503034b4d41aabb7e00edbf9d39a28ca59b3306c01cab1a7ed3d9805f7870",
+      "uploaded": "2026-10-24T10:40:00Z",
+      "filename": "1.0.0.dfu",
+      "format": "dfu",
+      "notes": "Meshtastic build, env meshnology_w13, firmware 2.8.0. ST7789 240x240 SPI display, SX1262 radio, L76KB GPS. Flash span 0x27000..0xd5370, 175 pages, 697.0 KB application."
+    }
+  ]
+}
