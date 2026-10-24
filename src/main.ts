@@ -13,7 +13,8 @@ import {
 import { fetchManifest, fetchDevice, CatalogError } from './catalog/api';
 import { downloadFirmware } from './catalog/reader';
 import {
-  hexToNrfImage, describeNrfImage, fetchNrfFirmware, type NrfImage,
+  hexToNrfImage, describeNrfImage, fetchNrfFirmware, nrfImageFromBytes,
+  type NrfImage,
 } from './catalog/nrfReader';
 import { parseDfuPackage, describeDfuPackage } from './nrf/dfuPackage';
 import type { DeviceDetails, FirmwareVersion } from './catalog/types';
@@ -85,34 +86,39 @@ const abortFlag = { aborted: false };
  * Protocol-level erase before the nRF write.
  *
  * START already erases every page named in the init packet, so a normal
- * flash is already a fresh page write. Setting this adds explicit ERASE_PAGE
- * packets first, which is what MeshCore's "Erase flash" option does — useful
- * when the board has stale app data in pages this image does not cover.
+ * flash is already a fresh page write. The erase mode adds explicit
+ * ERASE_PAGE packets first, which is what MeshCore's "Erase flash" does —
+ * useful when the board has stale app data in pages this image does not
+ * cover.
  */
 let nrfErase = false;
 
 /**
  * Reset the board into DFU before writing.
  *
- * Off by default. The board's bootloader is an Adafruit Feather UF2 one
- * that presents a serial port alongside its mass-storage volume, and
- * adafruit-nrfutil programs it successfully with the touch step disabled:
- * the operator double-taps RESET to enter DFU, then the tool talks to the
- * port as-is. A 1200-baud open has not been observed to work on this
- * bootloader, so the automatic reset is opt-in.
+ * The board's bootloader is an Adafruit Feather UF2 one that presents a
+ * serial port alongside its mass-storage volume, and adafruit-nrfutil
+ * programs it successfully with the touch step disabled: the operator
+ * double-taps RESET to enter DFU, then the tool talks to the port as-is.
+ *
+ * The DTR pulse below is the same idea done automatically. It is on by
+ * default because it saves the user the double-tap, and the transport
+ * reopens the port afterwards, since the pulse reboots the board and the
+ * USB connection comes back under a new number.
  */
-let nrfAutoReset = false;
+const nrfAutoReset = false;
 
 /**
- * Pulse DTR before writing.
+ * Pulse DTR before writing, to make the bootloader enter DFU mode.
  *
- * Off by default. Nordic's reference transport pulses DTR to make the
- * bootloader enter DFU mode, but it uses pyserial, where DTR is a hardware
- * line and the USB connection survives. In a browser the same edge
- * reboots the board and takes the USB connection down, so the port has to
- * be found and reopened again before anything can be written.
+ * On by default: it saves the user the double-tap of RESET. Nordic's
+ * reference transport pulses DTR whenever the touch step is off, but it
+ * uses pyserial, where DTR is a hardware line and the USB connection
+ * survives. In a browser the same edge reboots the board and takes the
+ * USB connection down, so the transport looks the port up again and
+ * reopens it before writing.
  */
-let nrfDtrPulse = false;
+const nrfDtrPulse = true;
 
 interface Preselected {
   deviceId: string | null;
@@ -253,21 +259,11 @@ app.innerHTML = `
               <button data-mode="multi" class="tab" id="tabMulti" data-i18n="tabMulti">${t().tabMulti}</button>
             </div>
             <div id="nrfOptions" class="nrf-options hidden">
-              <label class="check">
-                <input type="checkbox" id="nrfErase" />
-                <span data-i18n="nrfEraseLabel">${t().nrfEraseLabel}</span>
-              </label>
-              <p class="config-hint" data-i18n="nrfEraseHint">${t().nrfEraseHint}</p>
-              <label class="check">
-                <input type="checkbox" id="nrfAutoReset" />
-                <span data-i18n="nrfAutoResetLabel">${t().nrfAutoResetLabel}</span>
-              </label>
-              <p class="config-hint" data-i18n="nrfAutoResetHint">${t().nrfAutoResetHint}</p>
-              <label class="check">
-                <input type="checkbox" id="nrfDtrPulse" />
-                <span data-i18n="nrfDtrPulseLabel">${t().nrfDtrPulseLabel}</span>
-              </label>
-              <p class="config-hint" data-i18n="nrfDtrPulseHint">${t().nrfDtrPulseHint}</p>
+              <div class="tabs" id="nrfModeTabs">
+                <button data-mode="normal" class="tab active" id="tabNrfNormal" data-i18n="nrfModeNormal">${t().nrfModeNormal}</button>
+                <button data-mode="erase" class="tab" id="tabNrfErase" data-i18n="nrfModeErase">${t().nrfModeErase}</button>
+              </div>
+              <p class="config-hint" data-i18n="nrfModeHint">${t().nrfModeHint}</p>
             </div>
             <div id="drop" class="drop">
               <div class="upload-icon">↑</div>
@@ -575,6 +571,13 @@ async function addFiles(files: FileList | File[]) {
     }
     segments.push({ name: file.name, size: file.size, offset, file });
   }
+  // The nRF bootloader writes one image per transfer, so a second file
+  // would be silently ignored. Keep the first and say so.
+  if (chipFamily === 'nrf52840' && segments.length > 1) {
+    const dropped = segments.splice(1);
+    termWrite(`[dfu] only one firmware file is used per transfer; ` +
+      `ignored ${dropped.map(s => s.name).join(', ')}`);
+  }
   renderSegments();
 }
 
@@ -786,32 +789,10 @@ async function loadNrfImage(src: NrfSource): Promise<NrfImage> {
   if (src.kind === 'catalog') {
     return fetchNrfFirmware(src.deviceId, src.version, termWrite);
   }
-
-  const lower = src.name.toLowerCase();
-  if (lower.endsWith('.bin')) {
-    const bytes = new Uint8Array(await src.file.arrayBuffer());
-    return {
-      bytes,
-      startAddress: 0,
-      endAddress: bytes.byteLength,
-      pages: Math.ceil(bytes.byteLength / 4096),
-    };
-  }
-  if (lower.endsWith('.dfu') || lower.endsWith('.zip')) {
-    const pkg = parseDfuPackage(new Uint8Array(await src.file.arrayBuffer()));
-    const base = 0x27000;
-    termWrite(`[dfu] ${describeDfuPackage(pkg, base)}`);
-    if (pkg.softdeviceReqLabel) {
-      termWrite(`[dfu] the board must already carry SoftDevice ${pkg.softdeviceReqLabel}`);
-    }
-    return {
-      bytes: pkg.image,
-      startAddress: base,
-      endAddress: base + pkg.image.byteLength,
-      pages: Math.ceil(pkg.image.byteLength / 4096),
-    };
-  }
-  return hexToNrfImage(await src.file.text());
+  // A dropped file goes through the same decoder as the catalog, so a
+  // local .dfu and a catalog .dfu produce identical init packets.
+  const bytes = new Uint8Array(await src.file.arrayBuffer());
+  return nrfImageFromBytes(bytes, src.name, { onLog: termWrite });
 }
 
 /**
@@ -1174,23 +1155,17 @@ chipFamilySel.addEventListener('change', () => {
   applyChipFamily(chipFamilySel.value as ChipFamily);
 });
 
-$<HTMLInputElement>('#nrfErase').addEventListener('change', e => {
-  nrfErase = (e.target as HTMLInputElement).checked;
-  if (nrfErase) termWrite('[dfu] erase-before-write enabled');
-});
-
-$<HTMLInputElement>('#nrfDtrPulse').addEventListener('change', e => {
-  nrfDtrPulse = (e.target as HTMLInputElement).checked;
-  termWrite(nrfDtrPulse
-    ? '[dfu] DTR will be pulsed; the board reboots and the port is reopened afterwards'
-    : '[dfu] no DTR pulse: put the board in DFU mode (double-tap RESET) first');
-});
-
-$<HTMLInputElement>('#nrfAutoReset').addEventListener('change', e => {
-  nrfAutoReset = (e.target as HTMLInputElement).checked;
-  termWrite(nrfAutoReset
-    ? '[dfu] the port will be reset at 1200 baud to enter the bootloader'
-    : '[dfu] no auto reset: put the board in DFU mode (double-tap RESET) first');
+$<HTMLInputElement>('#nrfModeTabs').addEventListener('click', e => {
+  const btn = (e.target as HTMLElement).closest('button[data-mode]') as HTMLButtonElement | null;
+  if (!btn) return;
+  const mode = btn.dataset.mode;
+  nrfErase = mode === 'erase';
+  for (const b of $<HTMLElement>('#nrfModeTabs').querySelectorAll('button[data-mode]')) {
+    b.classList.toggle('active', b === btn);
+  }
+  termWrite(nrfErase
+    ? '[dfu] erase mode: every page the image covers is erased before the write'
+    : '[dfu] normal mode: the DFU start command erases the pages it covers');
 });
 
 /* ---------------------------------------------------------------- *

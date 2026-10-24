@@ -217,6 +217,80 @@ export async function fetchNrfFirmware(
   return hexToNrfImage(new TextDecoder().decode(bytes));
 }
 
+/**
+ * Turn raw firmware bytes into an image the DFU transport can write.
+ *
+ * The format is inferred from the file name, the same way the catalog
+ * reader does it:
+ *
+ *   .dfu / .zip   a Nordic/Adafruit DFU package. Its own firmware.dat is
+ *                 the init packet — device type, revision, SoftDevice
+ *                 requirement and the image CRC — and it is used verbatim.
+ *   .bin          a flat image, written at the application base address.
+ *   .hex          Intel HEX, decoded to a flat image at its own base.
+ *
+ * The application base address is 0x27000 on the W13 boards: the linker
+ * script puts the app there and the SoftDevice lives below it.
+ */
+export function nrfImageFromBytes(
+  bytes: Uint8Array,
+  filename: string,
+  options: { baseAddress?: number; onLog?: (line: string) => void } = {},
+): NrfImage {
+  const lower = filename.toLowerCase();
+  const base = options.baseAddress ?? 0x27000;
+  const onLog = options.onLog ?? (() => {});
+
+  if (lower.endsWith('.dfu') || lower.endsWith('.zip')) {
+    const pkg = parseDfuPackage(bytes);
+    onLog(`[dfu] ${describeDfuPackage(pkg, base)}`);
+    if (pkg.softdeviceReqLabel) {
+      onLog(`[dfu] the board must already carry SoftDevice ${pkg.softdeviceReqLabel}; ` +
+        'the bootloader refuses the write otherwise');
+    }
+    const deviceType = pkg.manifest.init_packet_data?.device_type ?? 0x0052;
+    const deviceRevision = pkg.manifest.init_packet_data?.device_revision ?? 0xadaf;
+    const initPacket = pkg.initPacket.byteLength
+      ? pkg.initPacket
+      : buildInitPacket({
+        deviceType,
+        deviceRevision,
+        softdeviceReq: pkg.softdeviceReq,
+        firmwareCrc16: crc16(pkg.image),
+      });
+    return {
+      bytes: pkg.image,
+      startAddress: base,
+      endAddress: base + pkg.image.byteLength,
+      pages: Math.ceil(pkg.image.byteLength / 4096),
+      initPacket,
+      deviceType,
+      deviceRevision,
+    };
+  }
+
+  if (lower.endsWith('.bin')) {
+    const deviceType = 0x0052;
+    const deviceRevision = 0xadaf;
+    return {
+      bytes,
+      startAddress: base,
+      endAddress: base + bytes.byteLength,
+      pages: Math.ceil(bytes.byteLength / 4096),
+      initPacket: buildInitPacket({
+        deviceType,
+        deviceRevision,
+        firmwareCrc16: crc16(bytes),
+      }),
+      deviceType,
+      deviceRevision,
+    };
+  }
+
+  // Anything else is treated as Intel HEX.
+  return hexToNrfImage(new TextDecoder().decode(bytes));
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const subtle = (globalThis as { crypto?: Crypto }).crypto;
   if (!subtle?.subtle) {
