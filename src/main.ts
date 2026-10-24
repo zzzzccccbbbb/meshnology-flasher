@@ -91,6 +91,17 @@ const abortFlag = { aborted: false };
  */
 let nrfErase = false;
 
+/**
+ * Skip the 1200-baud touch reset and talk to the port as-is.
+ *
+ * The touch reset reboots the board into its bootloader. That is convenient
+ * but it also reboots the board *out* of DFU when the user has already put
+ * it there by hand — which is the normal case on a board that enumerates as
+ * a mass-storage drive when booted, or when the reset button is easier than
+ * trusting the sequence.
+ */
+let nrfAlreadyDfu = false;
+
 interface Preselected {
   deviceId: string | null;
   version: string | null;
@@ -235,6 +246,11 @@ app.innerHTML = `
                 <span data-i18n="nrfEraseLabel">${t().nrfEraseLabel}</span>
               </label>
               <p class="config-hint" data-i18n="nrfEraseHint">${t().nrfEraseHint}</p>
+              <label class="check">
+                <input type="checkbox" id="nrfAlreadyDfu" />
+                <span data-i18n="nrfAlreadyDfuLabel">${t().nrfAlreadyDfuLabel}</span>
+              </label>
+              <p class="config-hint" data-i18n="nrfAlreadyDfuHint">${t().nrfAlreadyDfuHint}</p>
             </div>
             <div id="drop" class="drop">
               <div class="upload-icon">↑</div>
@@ -834,7 +850,7 @@ async function runNrfFlash(): Promise<void> {
 
     await flashNrfDfu(
       nrfDevice as SerialPort,
-      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase },
+      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: !nrfAlreadyDfu },
       {
         onPhase: phase => {
           const phaseName = phaseText[phase];
@@ -1144,6 +1160,13 @@ chipFamilySel.addEventListener('change', () => {
 $<HTMLInputElement>('#nrfErase').addEventListener('change', e => {
   nrfErase = (e.target as HTMLInputElement).checked;
   if (nrfErase) termWrite('[dfu] erase-before-write enabled');
+});
+
+$<HTMLInputElement>('#nrfAlreadyDfu').addEventListener('change', e => {
+  nrfAlreadyDfu = (e.target as HTMLInputElement).checked;
+  termWrite(nrfAlreadyDfu
+    ? '[dfu] the board is assumed to be in DFU mode already; the touch reset is skipped'
+    : '[dfu] the 1200-baud touch reset will be used to enter DFU mode');
 });
 
 /* ---------------------------------------------------------------- *

@@ -115,13 +115,18 @@ export class DfuLink {
    *
    * The 1200-baud open is the trigger, not the data transfer — Nordic treats
    * it as a modem-control line change and resets into the bootloader.
+   *
+   * The board then re-enumerates: the application CDC disappears and the
+   * bootloader's CDC takes its place, possibly with a different port number.
+   * That takes a moment, and the port we were handed is briefly unusable, so
+   * the caller has to retry rather than assume one open will do.
    */
   static async touchReset(port: SerialPort): Promise<void> {
     try {
       await port.open({ baudRate: DFU_TOUCH_BAUD });
     } catch {
-      // A board whose CDC is already open elsewhere can still be talked to
-      // directly; the caller reports NOT_IN_DFU later if it was not in DFU.
+      // A board whose CDC is already open elsewhere cannot be touched. It may
+      // already be sitting in DFU, so carry on and let the open below decide.
       return;
     }
     await sleep(SERIAL_PORT_OPEN_WAIT_TIME * 1000);
@@ -131,6 +136,43 @@ export class DfuLink {
       /* already closed */
     }
     await sleep(TOUCH_RESET_WAIT_TIME * 1000);
+  }
+
+  /**
+   * Open the port, retrying while the board re-enumerates.
+   *
+   * Two failures dominate in practice:
+   *   "Failed to open serial port"  — the board is mid-reset, the old handle
+   *                                   is not usable yet
+   *   "The port is already open"    — a previous attempt left the port open
+   *                                   and the browser still holds it
+   *
+   * The second one needs a close first, so every failed attempt is followed
+   * by a close attempt before the next open.
+   */
+  async openWithRetry(attempts = 12, delayMs = 500): Promise<void> {
+    let lastError = '';
+    for (let i = 0; i < attempts; i++) {
+      if (i > 0) await sleep(delayMs);
+      try {
+        await this.open();
+        return;
+      } catch (e) {
+        lastError = (e as Error).message ?? String(e);
+        // A half-open port blocks the next attempt; release it.
+        try {
+          await this.port.close();
+        } catch {
+          /* nothing to close */
+        }
+      }
+    }
+    throw new DfuError(
+      'NOT_IN_DFU',
+      `could not open the serial port after ${attempts} tries: ${lastError}. ` +
+      'The board may not be in DFU mode — double-tap RESET to enter the ' +
+      'bootloader, then try again.',
+    );
   }
 
   async open(): Promise<void> {
@@ -242,6 +284,13 @@ export interface DfuFlashRequest {
   startAddress: number;
   /** Send explicit ERASE_PAGE packets before starting. */
   erase?: boolean;
+  /**
+   * Reboot the board into DFU first, by opening the port at 1200 baud and
+   * closing it. Set this false when the user has already put the board into
+   * the bootloader by hand — touching it then would reboot it out of DFU
+   * and into the application again.
+   */
+  touchReset?: boolean;
   /** Give up after this long without progress, in ms. */
   timeoutMs?: number;
 }
@@ -266,12 +315,19 @@ export async function flashNrfDfu(
   let opened = false;
 
   try {
-    cb.onPhase('entering-dfu');
-    await DfuLink.touchReset(port);
+    if (req.touchReset !== false) {
+      cb.onPhase('entering-dfu');
+      cb.onLog('[dfu] 1200-baud touch reset to enter the bootloader');
+      await DfuLink.touchReset(port);
+    } else {
+      cb.onLog('[dfu] using the port as-is (no touch reset)');
+    }
     if (signal?.aborted) throw new DfuError('ABORTED', 'cancelled');
 
     cb.onPhase('opening');
-    await link.open();
+    // The board re-enumerates after the touch reset, so the handle we were
+    // given can be briefly unusable. Retry rather than fail on the first try.
+    await link.openWithRetry();
     opened = true;
     cb.onLog(`[dfu] port open at ${DFU_BAUD} baud, ${packets.data.length} data packets`);
 
