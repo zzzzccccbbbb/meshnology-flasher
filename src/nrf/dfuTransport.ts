@@ -140,6 +140,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
+/** The first few bytes of a frame, hex — enough to tell two frames apart. */
+function hexHead(frame: Uint8Array, count = 10): string {
+  const head = Array.from(frame.subarray(0, count))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join(' ');
+  return frame.length > count ? `${head} …` : head;
+}
+
 /**
  * The other serial ports the browser already has permission for.
  *
@@ -290,6 +298,24 @@ export class DfuLink {
   }
 
   /**
+   * Whether the port still looks usable.
+   *
+   * When a board reboots, the browser marks the stream as errored or
+   * closed. That is the signal that the handle we hold points at a USB
+   * instance that no longer exists.
+   */
+  isAlive(): boolean {
+    const p = this.port as unknown as {
+      readable?: ReadableStream<Uint8Array> | null;
+      writable?: WritableStream<Uint8Array> | null;
+    };
+    if (!p.readable && !p.writable) return false;
+    // A locked stream is normal — we hold the reader and writer. What
+    // matters is that the streams were not replaced by errors.
+    return p.readable !== null && p.readable !== undefined;
+  }
+
+  /**
    * Pulse DTR to make the bootloader enter DFU mode.
    *
    * Nordic's reference transport does this whenever the touch step is
@@ -342,8 +368,16 @@ export class DfuLink {
    *     accepted one
    *   * a packet that is not acknowledged is re-sent, and three failures
    *     abort the transfer
+   *
+   * `onSend` is called with the frame that went out and with a one-line
+   * description, so the page can show what it is waiting for instead of
+   * going quiet.
    */
-  async send(packet: Uint8Array, timeoutMs = 5000): Promise<void> {
+  async send(
+    packet: Uint8Array,
+    timeoutMs = 5000,
+    onSend?: (frame: Uint8Array, description: string) => void,
+  ): Promise<void> {
     if (!this.writer || !this.reader) throw new DfuError('TRANSFER_FAILED', 'port not open');
 
     let lastAck: number | null = null;
@@ -351,7 +385,9 @@ export class DfuLink {
 
     while (true) {
       attempts++;
-      await this.writer.write(slipEncode(packet));
+      const frame = slipEncode(packet);
+      await this.writer.write(frame);
+      onSend?.(frame, `${frame.length} bytes on the wire`);
       const ack = await this.readAck(timeoutMs);
 
       // The first response is accepted as-is, matching the reference.
@@ -396,8 +432,20 @@ export class DfuLink {
       }
       let chunk: ReadableStreamReadResult<Uint8Array>;
       try {
-        chunk = await this.reader.read();
-      } catch {
+        // A read on a port whose device has gone away can stay pending
+        // forever, so the deadline is enforced against the read itself and
+        // not only between reads.
+        chunk = await Promise.race([
+          this.reader.read(),
+          sleep(Math.max(0, deadline - Date.now())).then(() => {
+            throw new DfuError(
+              'NOT_IN_DFU',
+              'no response from the bootloader — the board may not be in DFU mode',
+            );
+          }),
+        ]);
+      } catch (e) {
+        if (e instanceof DfuError) throw e;
         throw new DfuError('TRANSFER_FAILED', 'serial read failed');
       }
       if (chunk.done) {
@@ -530,10 +578,30 @@ export async function flashNrfDfu(
     // Pulse DTR: on a Feather-style bootloader this edge is what switches
     // the device from its mass-storage mode into the DFU protocol. The
     // reference transport does it whenever the touch step is off.
+    //
+    // The edge can also reboot the board, which tears down the USB
+    // connection and makes the handle we hold useless — the port comes back
+    // under a different COM number and the old SerialPort object refuses to
+    // open. So after the pulse the port is checked, and if it died the
+    // bootloader is looked up again and reopened.
     const dtr = await link.pulseDtr();
     cb.onLog(dtr
       ? '[dfu] DTR pulsed to switch the bootloader into DFU mode'
       : '[dfu] DTR not supported on this port; assuming the board is already in DFU mode');
+
+    if (dtr && !(await link.isAlive())) {
+      cb.onLog('[dfu] the port went away after the DTR pulse; looking for the board again');
+      await link.close();
+      opened = false;
+      const current = await findBootloaderPort(port);
+      if (current !== port) {
+        cb.onLog('[dfu] the board re-enumerated; using the re-found port');
+        link.setPort(current);
+      }
+      await link.openWithRetry();
+      opened = true;
+      cb.onLog(`[dfu] port re-open at ${DFU_BAUD} baud`);
+    }
 
     const check = () => {
       if (signal?.aborted) throw new DfuError('ABORTED', 'cancelled');
@@ -551,14 +619,18 @@ export async function flashNrfDfu(
     // is what the earlier ordering (INIT first) ran into.
     cb.onPhase('start');
     check();
-    await link.send(packets.start, req.timeoutMs ?? 30000);
+    await link.send(packets.start, req.timeoutMs ?? 5000, (frame, what) => {
+      cb.onLog(`[dfu] START sent (${what}, first bytes ${hexHead(frame)}), waiting for the ack`);
+    });
     const wait = eraseWaitSeconds(req.image.length);
     cb.onLog(`[dfu] start accepted, waiting ${wait.toFixed(2)}s for the erase`);
     await sleep(wait * 1000);
 
     cb.onPhase('init');
     check();
-    await link.send(packets.init);
+    await link.send(packets.init, req.timeoutMs ?? 10000, (frame, what) => {
+      cb.onLog(`[dfu] INIT sent (${what}, first bytes ${hexHead(frame)}), waiting for the ack`);
+    });
     cb.onLog(`[dfu] init packet: ${packets.init.length} bytes ` +
       `(${req.image.length} image bytes, base 0x${req.startAddress.toString(16)})`);
 
