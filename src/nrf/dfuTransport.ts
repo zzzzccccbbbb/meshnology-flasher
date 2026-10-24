@@ -372,9 +372,15 @@ export interface DfuFlashRequest {
   erase?: boolean;
   /**
    * Reboot the board into DFU first, by opening the port at 1200 baud and
-   * closing it. Set this false when the user has already put the board into
-   * the bootloader by hand — touching it then would reboot it out of DFU
-   * and into the application again.
+   * closing it.
+   *
+   * Default false. The board's bootloader here is an Adafruit Feather UF2
+   * one (239a:0029) that presents both a serial port and a mass-storage
+   * volume, and adafruit-nrfutil programs it successfully with the touch
+   * step *disabled* — the operator double-taps RESET to enter DFU and then
+   * the tool talks to the port as-is. A 1200-baud open on this bootloader
+   * has not been observed to work, and it may reboot the board back out of
+   * DFU, so it is opt-in rather than automatic.
    */
   touchReset?: boolean;
   /** Give up after this long without progress, in ms. */
@@ -401,7 +407,7 @@ export async function flashNrfDfu(
   let opened = false;
 
   try {
-    if (req.touchReset !== false) {
+    if (req.touchReset === true) {
       cb.onPhase('entering-dfu');
       cb.onLog('[dfu] 1200-baud touch reset to enter the bootloader');
       await DfuLink.touchReset(port);
@@ -413,7 +419,7 @@ export async function flashNrfDfu(
         link.setPort(current);
       }
     } else {
-      cb.onLog('[dfu] using the port as-is (no touch reset)');
+      cb.onLog('[dfu] talking to the port as-is — put the board in DFU mode first');
     }
     if (signal?.aborted) throw new DfuError('ABORTED', 'cancelled');
 

@@ -92,15 +92,16 @@ const abortFlag = { aborted: false };
 let nrfErase = false;
 
 /**
- * Skip the 1200-baud touch reset and talk to the port as-is.
+ * Reset the board into DFU before writing.
  *
- * The touch reset reboots the board into its bootloader. That is convenient
- * but it also reboots the board *out* of DFU when the user has already put
- * it there by hand — which is the normal case on a board that enumerates as
- * a mass-storage drive when booted, or when the reset button is easier than
- * trusting the sequence.
+ * Off by default. The board's bootloader is an Adafruit Feather UF2 one
+ * that presents a serial port alongside its mass-storage volume, and
+ * adafruit-nrfutil programs it successfully with the touch step disabled:
+ * the operator double-taps RESET to enter DFU, then the tool talks to the
+ * port as-is. A 1200-baud open has not been observed to work on this
+ * bootloader, so the automatic reset is opt-in.
  */
-let nrfAlreadyDfu = false;
+let nrfAutoReset = false;
 
 interface Preselected {
   deviceId: string | null;
@@ -247,10 +248,10 @@ app.innerHTML = `
               </label>
               <p class="config-hint" data-i18n="nrfEraseHint">${t().nrfEraseHint}</p>
               <label class="check">
-                <input type="checkbox" id="nrfAlreadyDfu" />
-                <span data-i18n="nrfAlreadyDfuLabel">${t().nrfAlreadyDfuLabel}</span>
+                <input type="checkbox" id="nrfAutoReset" />
+                <span data-i18n="nrfAutoResetLabel">${t().nrfAutoResetLabel}</span>
               </label>
-              <p class="config-hint" data-i18n="nrfAlreadyDfuHint">${t().nrfAlreadyDfuHint}</p>
+              <p class="config-hint" data-i18n="nrfAutoResetHint">${t().nrfAutoResetHint}</p>
             </div>
             <div id="drop" class="drop">
               <div class="upload-icon">↑</div>
@@ -850,7 +851,7 @@ async function runNrfFlash(): Promise<void> {
 
     await flashNrfDfu(
       nrfDevice as SerialPort,
-      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: !nrfAlreadyDfu },
+      { image: img.bytes, startAddress: img.startAddress, erase: nrfErase, touchReset: nrfAutoReset },
       {
         onPhase: phase => {
           const phaseName = phaseText[phase];
@@ -1162,11 +1163,11 @@ $<HTMLInputElement>('#nrfErase').addEventListener('change', e => {
   if (nrfErase) termWrite('[dfu] erase-before-write enabled');
 });
 
-$<HTMLInputElement>('#nrfAlreadyDfu').addEventListener('change', e => {
-  nrfAlreadyDfu = (e.target as HTMLInputElement).checked;
-  termWrite(nrfAlreadyDfu
-    ? '[dfu] the board is assumed to be in DFU mode already; the touch reset is skipped'
-    : '[dfu] the 1200-baud touch reset will be used to enter DFU mode');
+$<HTMLInputElement>('#nrfAutoReset').addEventListener('change', e => {
+  nrfAutoReset = (e.target as HTMLInputElement).checked;
+  termWrite(nrfAutoReset
+    ? '[dfu] the port will be reset at 1200 baud to enter the bootloader'
+    : '[dfu] no auto reset: put the board in DFU mode (double-tap RESET) first');
 });
 
 /* ---------------------------------------------------------------- *
