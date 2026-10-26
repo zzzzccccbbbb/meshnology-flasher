@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-10-24T10:40:00Z",
+  "updated": "2026-10-24T18:30:00Z",
   "devices": [
     {
       "id": "w13-meshnology-meshcore",
@@ -18,7 +18,8 @@
       "chip": "nRF52840",
       "latestVersion": "1.0.0",
       "flashSize": "1MB",
-      "notes": "Meshtastic firmware. Application-only image; needs SoftDevice S140 7.3.0 already flashed"
+      "hidden": true,
+      "notes": "Meshtastic firmware, not the one these boards should run yet. The file stays in the catalog and is still downloadable by URL."
     }
   ]
 }

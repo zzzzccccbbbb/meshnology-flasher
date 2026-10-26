@@ -13,6 +13,15 @@ export interface DeviceSummary {
   latestVersion: string;
   flashSize: string;
   notes?: string;
+  /**
+   * Keep the entry out of the device picker.
+   *
+   * The firmware and the device record stay in the catalog, so the file
+   * is still reachable by URL and can be brought back by clearing the
+   * flag. Used for a build that is not the one the boards should be
+   * running yet.
+   */
+  hidden?: boolean;
 }
 
 export interface CatalogManifest {

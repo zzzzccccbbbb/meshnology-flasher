@@ -9,12 +9,12 @@
   "versions": [
     {
       "version": "1.1.0",
-      "size": 463422,
-      "sha256": "ecaf486a3bba8f86cc4b398354842ad794c6b43151cb935a577bfcb5ccd3f202",
-      "uploaded": "2026-10-24T10:40:00Z",
+      "size": 441027,
+      "sha256": "8e90c156567e500c25a2890f880196634d8dfcfb2746f54224cd58ae4755a4ac",
+      "uploaded": "2026-10-24T18:30:00Z",
       "filename": "1.1.0.dfu",
       "format": "dfu",
-      "notes": "MeshCore build, env W13Meshnology_companion_radio_ble. ST7789 240x240 SPI display, BLE advert name = MAC last 6 hex digits. Flash span 0x27000..0x97f1c, 113 pages, 451.8 KB application."
+      "notes": "MeshCore build from ~/platformIO/MeshCore/MeshCore, env meshnology_w13_companion_radio_ble. ST7789 240x240 SPI display (rotation 2, 128x64 UI scaled 1.875x3.75), SX1262 radio, L76KB GPS. Flash span 0x27000..0x92960, 108 pages, 430.0 KB application."
     },
     {
       "version": "1.0.0",
@@ -23,7 +23,7 @@
       "uploaded": "2026-10-24T09:53:00Z",
       "filename": "1.0.0.dfu",
       "format": "dfu",
-      "notes": "Earlier MeshCore build, env meshnology_w13_companion_radio_ble. Flash span 0x27000..0x91f80, 107 pages, 428.0 KB application."
+      "notes": "Earlier MeshCore build, same env. Flash span 0x27000..0x91f80, 107 pages, 428.0 KB application."
     }
   ]
 }

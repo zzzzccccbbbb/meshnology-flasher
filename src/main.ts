@@ -1327,11 +1327,14 @@ async function loadCatalogPicker() {
   }
 }
 
-function populateDeviceDropdown(manifest: { devices: Array<{ id: string; displayName: string; latestVersion: string }> }) {
+function populateDeviceDropdown(manifest: { devices: Array<{ id: string; displayName: string; latestVersion: string; hidden?: boolean }> }) {
   const sel = document.getElementById('catalogDevice') as HTMLSelectElement | null;
   if (!sel) return;
   sel.innerHTML = '';
-  if (!manifest.devices.length) {
+  // Hidden entries stay in the catalog and remain downloadable by URL,
+  // but they do not show up in the picker.
+  const visible = manifest.devices.filter(d => !d.hidden);
+  if (!visible.length) {
     const opt = document.createElement('option');
     opt.value = '';
     opt.textContent = t().catalogEmpty;
@@ -1339,7 +1342,7 @@ function populateDeviceDropdown(manifest: { devices: Array<{ id: string; display
     sel.disabled = true;
     return;
   }
-  for (const d of manifest.devices) {
+  for (const d of visible) {
     const opt = document.createElement('option');
     opt.value = d.id;
     // A device whose firmware has not been published yet carries an empty
@@ -1367,9 +1370,9 @@ function populateDeviceDropdown(manifest: { devices: Array<{ id: string; display
     }
   };
   // Auto-load first device's versions so the UI is one step ahead
-  if (manifest.devices[0]) {
-    sel.value = manifest.devices[0].id;
-    void fetchDevice(manifest.devices[0].id).then(populateVersionDropdown).catch((e) => {
+  if (visible[0]) {
+    sel.value = visible[0].id;
+    void fetchDevice(visible[0].id).then(populateVersionDropdown).catch((e) => {
       const msg = e instanceof CatalogError ? friendlyCatalogError(e, T) : (e as Error).message;
       summaryEl.textContent = msg;
     });
