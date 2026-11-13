@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-10-24T18:30:00Z",
+  "updated": "2026-11-13T11:19:00Z",
   "devices": [
     {
       "id": "w13-meshnology-meshcore",
@@ -20,6 +20,33 @@
       "flashSize": "1MB",
       "hidden": true,
       "notes": "Meshtastic firmware, not the one these boards should run yet. The file stays in the catalog and is still downloadable by URL."
+    },
+    {
+      "id": "w10-meshnology-meshcore",
+      "displayName": "W10 Meshnology LCD (MeshCore, ESP32-S3)",
+      "vendor": "Meshnology",
+      "chip": "ESP32-S3",
+      "latestVersion": "1.0.0",
+      "flashSize": "16MB",
+      "notes": "MeshCore firmware. Full merged image (bootloader + partition table + app), flashed over Web Serial."
+    },
+    {
+      "id": "w15-meshnology-meshcore",
+      "displayName": "W15 Meshnology (MeshCore, ESP32-S3)",
+      "vendor": "Meshnology",
+      "chip": "ESP32-S3",
+      "latestVersion": "1.0.0",
+      "flashSize": "16MB",
+      "notes": "MeshCore firmware. Full merged image (bootloader + partition table + app), flashed over Web Serial."
+    },
+    {
+      "id": "m19-meshnology-meshcore",
+      "displayName": "M19 Meshnology LCD (MeshCore, ESP32-S3)",
+      "vendor": "Meshnology",
+      "chip": "ESP32-S3",
+      "latestVersion": "1.0.0",
+      "flashSize": "16MB",
+      "notes": "MeshCore firmware. Full merged image (bootloader + partition table + app), flashed over Web Serial."
     }
   ]
 }

@@ -1,0 +1,20 @@
+{
+  "id": "w15-meshnology-meshcore",
+  "displayName": "W15 Meshnology (MeshCore, ESP32-S3)",
+  "vendor": "Meshnology",
+  "chip": "ESP32-S3",
+  "chipFamily": "esp32",
+  "flashSize": "16MB",
+  "notes": "Full merged image: bootloader at 0x0, partition table at 0x8000, application at 0x10000. Flashed over Web Serial with esptool.js.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "size": 1287376,
+      "sha256": "0c582dcbb1884d12054ebfb05c03145135bc3e37efb024ec2825ea02d9298aaa",
+      "uploaded": "2026-11-13T11:18:00Z",
+      "filename": "1.0.0.bin",
+      "format": "bin",
+      "notes": "MeshCore build from ~/platformIO/MeshCore/MeshCore, env meshnology_w15_companion_radio_ble. Semtech LR2021 radio (passive XTAL, TCXO 0.0V, AM36 RF switch), SSD1306 OLED at 0x3C (rotation 2). Application at 0x10000, 1,221,840 bytes."
+    }
+  ]
+}
