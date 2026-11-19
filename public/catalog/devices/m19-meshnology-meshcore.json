@@ -1,6 +1,6 @@
 {
   "id": "m19-meshnology-meshcore",
-  "displayName": "M19 Meshnology LCD (MeshCore, ESP32-S3)",
+  "displayName": "M19 Meshnology 1.33 LCD (MeshCore, ESP32-S3)",
   "vendor": "Meshnology",
   "chip": "ESP32-S3",
   "chipFamily": "esp32",
@@ -8,13 +8,13 @@
   "notes": "Full merged image: bootloader at 0x0, partition table at 0x8000, application at 0x10000. Flashed over Web Serial with esptool.js.",
   "versions": [
     {
-      "version": "1.0.0",
+      "version": "v1.18.0",
       "size": 1374048,
       "sha256": "095ff750c9056b314507fb3fdac28ac158f95e7bd58c7755ca4af78f315941a6",
       "uploaded": "2026-11-13T11:19:00Z",
-      "filename": "1.0.0.bin",
+      "filename": "v1.18.0.bin",
       "format": "bin",
-      "notes": "MeshCore build from ~/platformIO/MeshCore/MeshCore, env meshnology_m19_companion_radio_ble. Semtech LR2021 radio (active TCXO 1.8V), MCP23017 IO expander, ST7789 240x240 LCD (rotation 2, scaled 1.875x3.75), five-way ADC joystick, LORA_FREQ=915.23. Application at 0x10000, 1,308,512 bytes."
+      "notes": "MeshCore build from ~/platformIO/MeshCore/MeshCore, env meshnology_m19_companion_radio_ble. Semtech LR2021 radio (active TCXO 1.8V), MCP23017 IO expander, ST7789 1.33\" 240x240 LCD (rotation 2, scaled 1.875x3.75), five-way ADC joystick, LORA_FREQ=915.23. Application at 0x10000, 1,308,512 bytes."
     }
   ]
 }

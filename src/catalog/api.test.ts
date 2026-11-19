@@ -135,11 +135,15 @@ describe('validators', () => {
     expect(isValidVersion('0.0.1')).toBe(true);
     expect(isValidVersion('10.20.30-rc.1')).toBe(true);
     expect(isValidVersion('1.0.0+build.42')).toBe(true);
+    // The catalog publishes the releases as "v1.18.0".
+    expect(isValidVersion('v1.18.0')).toBe(true);
+    expect(isValidVersion('v1.18.0-rc.1')).toBe(true);
   });
   it('rejects bad versions', () => {
     expect(isValidVersion('1.0')).toBe(false);
-    expect(isValidVersion('v1.0.0')).toBe(false);
     expect(isValidVersion('1.0.0.0')).toBe(false);
+    expect(isValidVersion('v')).toBe(false);
+    expect(isValidVersion('vv1.0.0')).toBe(false);
   });
   it('accepts 64-char hex SHA-256 only', () => {
     expect(isValidSha256('a'.repeat(64))).toBe(true);

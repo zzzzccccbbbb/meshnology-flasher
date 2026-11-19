@@ -7,7 +7,7 @@ import { nrfImageFromBytes } from './nrfReader';
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
 
-const DFU_PATH = join(repoRoot, 'public', 'firmware', 'w13-meshnology-meshcore', '1.0.0.dfu');
+const DFU_PATH = join(repoRoot, 'public', 'firmware', 'w13-meshnology-meshcore', 'v1.18.0.dfu');
 
 describe('nrfImageFromBytes', () => {
   it('unpacks a DFU package with the package\'s own init packet', () => {
@@ -16,13 +16,13 @@ describe('nrfImageFromBytes', () => {
 
     // The package's firmware.dat, byte for byte.
     expect([...img.initPacket].map(b => b.toString(16).padStart(2, '0')).join('')).toBe(
-      '5200afadffffffff01002301d0ac',
+      '5200afadffffffff010023011b41',
     );
     expect(img.deviceType).toBe(0x0052);
     expect(img.deviceRevision).toBe(0xadaf);
     expect(img.startAddress).toBe(0x27000);
-    expect(img.bytes.byteLength).toBe(438144);
-    expect(img.pages).toBe(107);
+    expect(img.bytes.byteLength).toBe(440224);
+    expect(img.pages).toBe(108);
   });
 
   it('synthesises an init packet for a bare .bin', () => {

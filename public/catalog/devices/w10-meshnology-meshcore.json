@@ -1,6 +1,6 @@
 {
   "id": "w10-meshnology-meshcore",
-  "displayName": "W10 Meshnology LCD (MeshCore, ESP32-S3)",
+  "displayName": "W10 Meshnology 1.54 LCD (MeshCore, ESP32-S3)",
   "vendor": "Meshnology",
   "chip": "ESP32-S3",
   "chipFamily": "esp32",
@@ -8,13 +8,13 @@
   "notes": "Full merged image: bootloader at 0x0, partition table at 0x8000, application at 0x10000. Flashed over Web Serial with esptool.js.",
   "versions": [
     {
-      "version": "1.0.0",
+      "version": "v1.18.0",
       "size": 1299392,
       "sha256": "ba2f4d70490c7124f4d7d167a659a863f585393e174dff5ebb9fce5a850f58dc",
       "uploaded": "2026-11-13T11:17:00Z",
-      "filename": "1.0.0.bin",
+      "filename": "v1.18.0.bin",
       "format": "bin",
-      "notes": "MeshCore build from ~/platformIO/MeshCore/MeshCore, env meshnology_w10_companion_radio_ble. SX1262 radio (DIO2 as RF switch, active TCXO 3.0V, SPI via MCP23017 EXIO), ST7796/ST7789 240x240 square LCD (rotation 2, 128x64 UI scaled 1.875x3.75), AXP2101 PMIC. Application at 0x10000, 1,233,856 bytes."
+      "notes": "MeshCore build from ~/platformIO/MeshCore/MeshCore, env meshnology_w10_companion_radio_ble. SX1262 radio (DIO2 as RF switch, active TCXO 3.0V, SPI via MCP23017 EXIO), ST7796/ST7789 1.54\" 240x240 square LCD (rotation 2, 128x64 UI scaled 1.875x3.75), AXP2101 PMIC. Application at 0x10000, 1,233,856 bytes."
     }
   ]
 }

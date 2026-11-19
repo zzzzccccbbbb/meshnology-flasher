@@ -77,8 +77,14 @@ export const SHA256_RE = /^[0-9a-f]{64}$/;
 /** Device id regex: lowercase, digits, dash, must start with [a-z0-9], 1..41 chars. */
 export const DEVICE_ID_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
-/** Semver-ish version regex: x.y.z with optional pre-release/build metadata. */
-export const VERSION_RE = /^\d+\.\d+\.\d+([-+][A-Za-z0-9.-]+)?$/;
+/**
+ * Semver-ish version regex: x.y.z with optional pre-release/build metadata.
+ *
+ * The leading "v" is allowed because that is how the releases are named in
+ * the catalog ("v1.18.0"), and the version doubles as the directory name
+ * the firmware is published under.
+ */
+export const VERSION_RE = /^v?\d+\.\d+\.\d+([-+][A-Za-z0-9.-]+)?$/;
 
 export function isValidDeviceId(id: string): boolean {
   return DEVICE_ID_RE.test(id);
